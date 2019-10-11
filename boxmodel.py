@@ -10,7 +10,6 @@ from geopy.distance import geodesic as ge
 import csv
 import matplotlib.pyplot as plt
 import cmocean           as cm
-import getpass           as gp
 import matplotlib        as mp
 import netCDF4           as nc
 import numpy             as np
@@ -21,16 +20,9 @@ from itertools             import zip_longest
 
 # nutboxmod provides "model" which is the fortran model compiled with "f2py"
 import importlib.util
-spec = importlib.util.spec_from_file_location("nutboxmod", "/Users/jml1/GitHub/Lauderdale_ligand_iron_microbe_feedback/nutboxmod.cpython-37m-darwin.so")
+spec = importlib.util.spec_from_file_location("nutboxmod", "nutboxmod.cpython-37m-darwin.so")
 nutboxmod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(nutboxmod)
-
-mp.rcParams['xtick.labelsize'] = 14
-mp.rcParams['ytick.labelsize'] = 14 
-
-len_xaxis,len_yaxis = 4.,4. #fix here your numbers
-xspace, yspace = .9, .9 # change the size of the void border here.
-x_fig,y_fig = len_xaxis / xspace, len_yaxis / yspace
 
 # Set to TRUE, the script will call the box model ninc^2 times, set to false and it will skip to the plotting
 RUNMODEL=False
@@ -730,6 +722,13 @@ export_fixed1nmlig=(epcntrl[0,tlen]+epcntrl[1,tlen])*117*86400*365*12*1e-15
 nlimit_fixed1nmlig=nlcntrl[tlen]
 
 #%% 4. PLOTS
+mp.rcParams['xtick.labelsize'] = 14
+mp.rcParams['ytick.labelsize'] = 14 
+
+len_xaxis,len_yaxis = 4.,4. #fix here your numbers
+xspace, yspace = .9, .9 # change the size of the void border here.
+x_fig,y_fig = len_xaxis / xspace, len_yaxis / yspace
+
 # Get medians of model results along lambda/gamma contours
 gaovla_average=np.geomspace(0.1,1e10,2*nincs)
 
@@ -835,7 +834,7 @@ f3ax2.xaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 f3ax2.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 f3ax2.set_ylabel("Ligand\nConcentration\n[nmol/kg]",fontsize=14)
 #f3ax2.set_xlabel("Model time [log$_{10}$(yrs)]",fontsize=14)
-f3ax2.text(-3,np.max(f3ax3.get_ylim()),'(c)',fontsize=16)
+f3ax2.text(-3,np.max(f3ax2.get_ylim()),'(b)',fontsize=16)
 
 # Iron
 # SO
@@ -850,7 +849,7 @@ f3ax3.set_xlim(left=-2)
 f3ax3.xaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 f3ax3.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 f3ax3.set_ylabel("Iron\nConcentration\n[nmol/kg]",fontsize=14)
-f3ax3.text(-3,np.max(f3ax2.get_ylim()),'(b)',fontsize=16)
+f3ax3.text(-3,np.max(f3ax3.get_ylim()),'(c)',fontsize=16)
 
 f3ax4.plot(np.log10(timeseries_tim),timeseries_exp,color='firebrick',linewidth=5,label="Southern+Northern")
 #f3ax4.legend(frameon=False,fontsize=14)
