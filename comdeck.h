@@ -47,13 +47,13 @@
        REAL*8, DIMENSION(nbox) :: lt    
 
 ! biogeochemical tracers output 
-       REAL*8, intent(out), DIMENSION(nbox,outstepmax) :: pout  
-       REAL*8, intent(out), DIMENSION(nbox,outstepmax) :: fout  
-       REAL*8, intent(out), DIMENSION(nbox,outstepmax) :: lout  
-       REAL*8, intent(out), DIMENSION(nbox,outstepmax) :: epout 
-       CHARACTER*4, intent(out), DIMENSION(nbox,outstepmax) :: nlout 
-       REAL*8, intent(out), DIMENSION(outstepmax)      :: tout  
-       REAL*8, intent(out), DIMENSION(outstepmax)      :: psout 
+       REAL*8, intent(out), DIMENSION(nbox,outstepmax+1) :: pout  
+       REAL*8, intent(out), DIMENSION(nbox,outstepmax+1) :: fout  
+       REAL*8, intent(out), DIMENSION(nbox,outstepmax+1) :: lout  
+       REAL*8, intent(out), DIMENSION(nbox,outstepmax+1) :: epout 
+       REAL*8, intent(out), DIMENSION(outstepmax+1)      :: nlout 
+       REAL*8, intent(out), DIMENSION(outstepmax+1)      :: tout  
+       REAL*8, intent(out), DIMENSION(outstepmax+1)      :: psout 
                 
 ! extra biogeochem...
        REAL*8, DIMENSION(nbox) :: feprime

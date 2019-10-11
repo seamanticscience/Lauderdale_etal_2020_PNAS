@@ -32,12 +32,12 @@
        implicit none
        include 'comdeck.h'
 ! local variables
-       INTEGER :: i, nstep, outstep
-       REAL*8 :: time, exp1, exp2
+       INTEGER :: i, nstep, outstep, writefiles
+       REAL*8 :: time, exp1, exp2, lim
        CHARACTER*64 :: filename
-       CHARACTER*4, DIMENSION(nbox) :: lim
 
 ! set some parameters
+       writefiles = 0
        nstepmax   = int(maxyears*d_per_yr)        
 ! initialize outstep
        outstep = 1
@@ -106,26 +106,7 @@
 !      alpha = 0.5d-6 * conv / (30.0*86400.0) ! Recover with alpha_yr=6e-6
        alpha = alpha_yr * conv / (s_per_yr) 
 
-       lim(1) = 'X'
-       lim(2) = 'X'
-       
-! open an output file and write initial values to file
-       write (filename, '(a,I0.6,a)') 'ironmodel',id,'.dat'
-       open(14,file=filename,status='unknown')
-           
-! write column header output 
-        write(14,*)(   't(yr)   PO4(1)   PO4(2)   PO4(3)   FeT(1) 
-     &  FeT(2)   FeT(3)   LT(1)   LT(2)   LT(3)   Exp(1)   Exp(2)   
-     &  Limit,   P*   ')
-     
- 300    format(1x, e14.3, 1x, 
-     &             f14.3, 1x, f14.3, 1x, f14.3, 1x, 
-     &             f14.3, 1x, f14.3, 1x, f14.3, 1x, 
-     &             f14.3, 1x, f14.3, 1x, f14.3, 1x, 
-     &             f14.3, 1x, f14.3, 1x, A1,A1, 1x,
-     &             f14.3)
-     
-! write initial values to the output arrays....
+! write initial values to the output....
 ! convert to nmol kg-1 for iron, micromol kg-1 for PO4
        po4M = (po4/conv) * 1.0e6  
        fetM = (fet/conv) * 1.0e9
@@ -134,14 +115,46 @@
 ! evaluate pstar, consistent with Harvardton Bears SO sensitivity
        pstar = (po4M(3) - po4M(1)) / po4M(3) 
        
-! Initial export production
-       exp1= 0.0
-       exp2= 0.0
-       
+! Initial export production and nutrient limitation code
+       export = (/ 0.0, 0.0, 0.0 /)
+       lim = 0.0
+
+       if ( writefiles.EQ.1 ) then     
+! open an output file and write initial values to file
+          write (filename, '(a,I0.6,a)') 'ironmodel',id,'.dat'
+          open(14,file=filename,status='unknown')
+           
+! write column header output 
+           write(14,*)(   't(yr)   PO4(1)   PO4(2)   PO4(3)    
+     &  FeT(1)  FeT(2)   FeT(3)   LT(1)   LT(2)   LT(3)   Exp(1)    
+     &  Exp(2)  Limit,   P*   ')
+     
+ 300       format(1x, e14.3, 1x, 
+     &             f14.3, 1x, f14.3, 1x, f14.3, 1x, 
+     &             f14.3, 1x, f14.3, 1x, f14.3, 1x, 
+     &             f14.3, 1x, f14.3, 1x, f14.3, 1x, 
+     &             f14.3, 1x, f14.3, 1x, f14.3, 1x,
+     &             f14.3)
+
 ! Write initial conditions to file
-        write(14,300) time, po4M, fetM, ltM, exp1, exp2, 
-     &              lim(1), lim(2), pstar   
-        
+           write(14,300) time, po4M, fetM, ltM, export(1), 
+     &              export(2), lim, pstar          
+       endif
+
+! output to array
+        tout(outstep) = time
+        do i=1,nbox
+           pout(i,outstep) = po4M(i)
+           fout(i,outstep) = fetM(i)
+           lout(i,outstep) = ltM (i)
+           epout(i,outstep)= export(i)*vol(i) 
+        enddo
+        nlout(outstep) = lim
+        psout(outstep) = pstar
+
+! Increment outstep
+         outstep=outstep+1
+         
 ! timestepping .........................................
        do 200 nstep = 1,INT(nstepmax) 
 
@@ -165,18 +178,32 @@
          felimit= fet(i)/(fet(i) + kfe) 
 
          export(i) = alpha * ilimit * min(plimit,felimit)
-         
+! Nutrient Limitation codes:
+!  0 = Initial condition
+!  1 = macronutrient
+!  2 = iron
+!  3 = light
+!  4 = colimited
+! So for box 1 "tens" and box 2 "units" values (-9.0*i+19 allows this)
+!   the possible codes are 00, 11-14, 21-24, 31-34 and 41-44, 
+!   with the most common being:
+!   00 - initial, 
+!   11 - global macronutrient limitation, 
+!   22 - global iron limitation, and
+!   21 - box 1 iron limited and box 2 macronutrient limited.
          if (plimit.LT.felimit.AND.plimit.LT.ilimit) then
-!           Phosphate limits production         
-            lim(i)='P'
+!           Phosphate limits production (code 1)       
+            lim=lim+(1*(-9.0*i+19))
          elseif (felimit.LT.plimit.AND.felimit.LT.ilimit) then
-!           Iron limits production         
-            lim(i)='I'
+!           Iron limits production (code 2))
+            lim=lim+(2*(-9.0*i+19))
          elseif (ilimit.LT.plimit.AND.ilimit.LT.felimit) then
 !           Light limits production (but also there will be nutrient limitation too)
-            lim(i)='L'
+!           (code 3)
+            lim=lim+(3*(-9.0*i+19))
          else
-            lim(i)='C'
+!           colimitation (code 4)         
+            lim=lim+(4*(-9.0*i+19))
          endif
 
 ! add to rate of change array
@@ -242,10 +269,12 @@
          fetM = (fet/conv) * 1.0e9
          ltM  = (lt /conv) * 1.0e9
 
+       if ( writefiles.EQ.1 ) then     
 ! write to file
-        write(14,300) time, po4M, fetM, ltM, exp1, exp2, 
-     &              lim(1), lim(2), pstar  
-     
+           write(14,300) time, po4M, fetM, ltM, exp1, 
+     &              exp2, lim, pstar  
+       endif
+       
 ! output to array
          tout(outstep) = time
          do i=1,nbox
@@ -253,13 +282,16 @@
            fout(i,outstep) = fetM(i)
            lout(i,outstep) = ltM (i)
            epout(i,outstep)= export(i)*vol(i) 
-           nlout(i,outstep)= lim(i)
          enddo
-         psout(outstep)  = pstar
+         nlout(outstep) = lim
+         psout(outstep) = pstar
 
 ! Increment outstep
          outstep=outstep+1
        endif
+       
+!      reset lim
+       lim = 0.0
        
 ! end timestepping loop
  200   enddo
