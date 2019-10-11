@@ -66,7 +66,7 @@ def oceanmasks(xc,yc,maskin):
         if np.ndim(yc)>2:
             yc=yc[:,:,0]
             
-    mask_file='/Users/'+gp.getuser()+'/Dropbox_Work/Applications/MATLAB/mitgcm_toolbox/woa13_basinmask_01.msk'
+    mask_file='woa13_basinmask_01.msk'
 
     x = np.loadtxt(mask_file,delimiter=',',usecols=(1,),skiprows=2)
     y = np.loadtxt(mask_file,delimiter=',',usecols=(0,),skiprows=2)
@@ -241,13 +241,9 @@ def mad(arr):
 
 # set macronutrient reference for the cost function from WOA13 annual climatology            
 def get_macro_reference(fname,Rnp=16):
-    if R_np==16:
-        woafile='/Users/'+gp.getuser()+'/Dropbox_Work/cfluxes_matlab/obs/woa13_annual_nitrate.nc'
-    else:
-        woafile='/Users/'+gp.getuser()+'/Dropbox_Work/cfluxes_matlab/obs/woa13_annual_phosphate.nc'
     
     try:    
-        woa=nc.Dataset(woafile,mode='r')
+        woa=nc.Dataset(fname,mode='r')
     
         n_woa_lat=woa.dimensions['lat' ].size
         n_woa_lon=woa.dimensions['lon' ].size
@@ -343,7 +339,7 @@ def get_macro_reference(fname,Rnp=16):
 def get_micro_reference(fname):
 # set Fe and L reference for the cost function from  GEOTRACES IDP 2017 
     try:
-        idp  = nc.Dataset(idpfile, mode='r')
+        idp  = nc.Dataset(fname, mode='r')
             
         # Variables of interest
         vars= {
@@ -610,14 +606,15 @@ ndo=np.ones((niters,1))
 fdo=np.ones((niters,1))
 ldo=np.ones((niters,1))
 
+# Get reference values for model-data comparison
 if R_np==16:
-    woafile='/Users/'+gp.getuser()+'/Dropbox_Work/cfluxes_matlab/obs/woa13_annual_nitrate.nc'
+    woafile='woa13_annual_nitrate.nc'
 else:
-    woafile='/Users/'+gp.getuser()+'/Dropbox_Work/cfluxes_matlab/obs/woa13_annual_phosphate.nc'
+    woafile='woa13_annual_phosphate.nc'
 
 nref, nstd = get_macro_reference(woafile,Rnp=R_np)
     
-idpfile='/Users/'+gp.getuser()+'/Dropbox_Work/dust_pire/misc/GEOTRACES_IDP2017_v2_Discrete_Sample_Data.nc'
+idpfile='GEOTRACES_IDP2017_v2_Discrete_Sample_Data.nc'
 
 fref, fstd, lref, lstd = get_micro_reference(idpfile)
 
