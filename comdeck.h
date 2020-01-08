@@ -81,19 +81,20 @@
 ! Iron cycle parameters 
 ! atomic weight of iron = 56
        REAL*8, PARAMETER  :: weight_fe = 56.0  
-!solubility of Aeolian iron:
+!solubility of iron:
        REAL*8, PARAMETER  :: fe_sol = 0.0025
 ! conditional stability FeL: (mol kg-1)-1       
 !       REAL*8, PARAMETER  :: beta   = 1.0d9
        REAL*8, PARAMETER  :: beta   = 1.0d9
-! Fe' scavenging rate: (s-1) 
+! Free Fe scavenging rate: (s-1) 
        REAL*8, PARAMETER  :: Kscav  = 1.0d-7      
 ! relaxfe (s) 
        REAL*8, PARAMETER  :: relaxfe= 0.01*s_per_yr 
 ! multiplier to test sensitivity to dust deposition
 !       REAL*8, PARAMETER  :: depfactor = 1.0  
        REAL*8, intent(in) :: depfactor  
-! dust deposition rate
+       REAL*8, intent(in) :: ventfactor
+! iron input rate
        REAL*8, DIMENSION(nbox) :: fe_depo
 ! Dynamic Ligand variables
 ! gamma_Fe is fraction of "export"/"remin" as ligand. Must be < 1!

@@ -25,7 +25,7 @@
        subroutine model(maxyears, outputyears,
      &       pin, fin, lin,
      &       tout,pout,fout,lout,epout,nlout,psout,  
-     &       gamma_Fe,lt_lifetime,depfactor,
+     &       gamma_Fe,lt_lifetime,depfactor,ventfactor,
      &       alpha_yr,dlambdadz,psi,id)
 
 ! no implicit variables
@@ -85,11 +85,10 @@
 !  g Fe m-2 year-1 (1 - “Southern Ocean”, 2 - "N Atlantic")
        fe_depo(1)= depfactor * 0.01   
        fe_depo(2)= depfactor * 1.0 
-       fe_depo(3)= depfactor * 0.0 
+       fe_depo(3)= ventfactor* 1.0 
        
 !  convert to mol Fe m-2 s-1
-       fe_depo(1) = fe_depo(1) / (weight_fe*s_per_yr) 
-       fe_depo(2) = fe_depo(2) / (weight_fe*s_per_yr)
+       fe_depo = fe_depo / (weight_fe*s_per_yr) 
 
 ! ligand parameters 
 ! longer lifetime in deep ocean (Ye et al, 2009; Yamaguchi et al, 2002)
@@ -218,7 +217,7 @@
  210   end do 
 ! end of surface boxes loop
 
-! deposition of iron (suface only currently...)
+! input of iron (can include (vent source)/fe_sol)
        dfetdt = dfetdt + fe_sol * fe_depo / dz 
 
 ! Deep box...assume whats lost from surface boxes is gained by deep box
