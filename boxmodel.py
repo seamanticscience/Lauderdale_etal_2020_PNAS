@@ -1,10 +1,14 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Oct  7 17:06:41 2019
+#!/usr/bin/env python
+# coding: utf-8
 
-@author: jml1
-"""
+# ## Model runs, data, and analysis routines for exploring the "Ligand-Iron-Microbe" feedback (Lauderdale, Braakman, Forget, Dutkiewicz, and Follows)
+# 
+# <img src="ligand_feedback.png" width="350" />
+# 
+# Given the organic origin of iron-binding ligands, we hypothesize that a positive feedback between microbial activity, ligand abundance, and iron availability could emerge. 
+# Iron is supplied by dust deposition, sediment mobilization, and hydrothermal activity. 
+# In a hypothetical watermass where ligand abundance is initially very low, Fe(III) is largely insoluble, but a small population of microbes subsist. Their turnover produces ligands such as siderophores, excreted organic carbon, or chelating detritus. Greater ligand abundance retains more iron in solution, incrementally relieving iron limitation, promoting further biological production, and so on.
+# Eventually, other requirements such as macronutrients, become limiting, and additional iron no longer increases productivity. At appropriate time and space scales, the global ligand pool is regulated, supporting "just enough" iron to match availability of other resources redistributed by ocean circulation, maximizing overall nutrient consumption and global productivity. 
 
 import csv
 import matplotlib.pyplot as plt
@@ -24,8 +28,19 @@ spec.loader.exec_module(nutboxmod)
 
 import utils
 
-# Set to TRUE, the script will call the box model ninc^2 times, set to false and it will skip to the plotting
+# Output figures as pdf or eps
+figfmt='pdf'
+#figfmt='eps'
+
+# Set to True, the script will call the box model nincs^2 times (first, must have compiled boxmodel.f with f2py;  
+#an ensemble of integrations could take a long time), set to False and it will load previously run results from 
+#the paper and plot them
 RUNMODEL=False
+
+# %% 1. Model parameters and initial conditions
+#  The box model has three boxes linked by an overturning circulation: an upwelling box with low iron input analagous to HNLC regions like the Southern Ocean, and a deep water formation region with significant iron input analagous to the Atlantic Ocean. Iron-binding ligands are produced by organic matter turnover, and lost by microbial degradation.
+# 
+# Set a few parameters:
 
 # Number of increments in parameter space
 nincs=100
@@ -41,12 +56,7 @@ conv = 1024.5
 
 finname ='boxmodel_input.csv'
 foutname='boxmodel_output.csv'
-
-figfmt='pdf'
-#figfmt='eps'
-   
-# %% 1. INITIAL CONDITIONS
-        
+         
 # Total number of model runs in ensemble
 niters=nincs*nincs
 
@@ -67,25 +77,24 @@ psi=20.0e6 # Sv
 # Biological production maximum rate per year
 alpha_yr=6e-6
 
-# Iron deposition rate (Atlantic receives 1.00xdustdep [g/m2/yr] while SO receives 0.01xdustdep)
-'''
- Default value (7.0) is taken from the box model paper (Table 1) in Parekh et al (2004).
+# Surface iron input rate (Atlantic receives 1.00xdep [g/m2/yr] while SO receives 0.01xdep)
+# 
+# Default value in the model (7.0) is taken from the box model paper (Table 1) in Parekh et al (2004) with a asymetry value of 0.01. Data from Mahowald et al (2006) suggests:\
+# • Whole NA: 0.25 gFE m-2 yr-1\
+# • 0 to 20N: 0.40 gFE m-2 yr-1\
+# • 20N ++  : 0.16 gFE m-2 yr-1\
+# • 40N ++  : 0.10 gFE m-2 yr-1\
+# • Whole SO: 0.0015 gFE m-2 yr-1\
+# • Whole SH: 0.0033 gFE m-2 yr-1
+# 
 
- Data from Mahowald et al (2006) suggests:
---Whole NA: 0.25 gFE m-2 yr-1
---0 to 20N: 0.40 gFE m-2 yr-1
---20N ++  : 0.16 gFE m-2 yr-1
---40N ++  : 0.10 gFE m-2 yr-1
---Whole SO: 0.0015 gFE m-2 yr-1
---Whole SH: 0.0033 gFE m-2 yr-1
-'''
 # Dust deposition in g Fe m-2 year-1
 dustdep=0.15
 # Hydrothermal vent input of 1 Gmol/yr (Tagliabue et al., 2010)
 # mol Fe/yr * g/mol * 1/area  == g Fe m-2 year-1....divide by 2.5e-3 because fe_sol is multiplied again within the box model.
 ventdep=(1e9*56)/(area[2]*0.0025)
 
-# Assign systematically to cover parameter space. Use log spacing to get good data coverage at the really small values of gamma and lambda
+# Assign gamma and lambda parameters systematically to cover parameter space. Use log spacing to get good data coverage at the really small values*
 #gamma_fe is in phosphate units, not carbon units...divide by RCP=106 to get values referenced in paper
 # lt_rate is in years, then converted to seconds
 grid_lt_rate,grid_gamma=np.meshgrid(np.geomspace(0.1,1000,nincs),np.geomspace(1e-5,10,nincs))
@@ -94,8 +103,10 @@ lt_rate  = grid_lt_rate.flatten()*3.0e7
 
 gamma_over_lambda=(gamma_fe[:niters]/106)/(1/lt_rate[:niters]) # Lambda needs to be 1/s
 
-# Deep ocean box lifetime modifier
+# Deep ocean box lifetime modifier - capture the gradient introduced by photodegradation near the surface and slower loss in the deep ocean
 dlambdadz=0.01
+
+# **Assign random initial values of macronutrients, iron, and ligands**
 
 # Phosphate has to be conserved (convert to mol/m3 before volume integrating)
 pinv=nm.sum(np.array((2.1, 2.1, 2.1)) * conv * 1.0e-6 * vol)
@@ -110,7 +121,7 @@ parray=(boxfrac*pinv)/(vol*conv*1e-6)
 farray=np.random.randint(0,100,size=(niters,3)).astype(np.double)
 larray=np.random.randint(0,100,size=(niters,3)).astype(np.double)
 
-# Define global output arrays
+# **Define global output arrays**
 ncost=np.ones((niters,1))
 fcost=np.ones((niters,1))
 lcost=np.ones((niters,1))
@@ -140,7 +151,13 @@ ndo=np.ones((niters,1))
 fdo=np.ones((niters,1))
 ldo=np.ones((niters,1))
 
-# Get reference values for model-data comparison
+# %% Get reference values for model-data comparison
+# 
+# If World Ocean Atlas or GEOTRACES IDP files are not present, then the values given in Table 1 of the paper are used instead.
+
+# Print out objective function reference values
+PRINTREF=True
+
 if R_np==16:
     woafile='woa13_annual_nitrate.nc'
 else:
@@ -154,6 +171,19 @@ fref, fstd, lref, lstd = utils.get_micro_reference(idpfile)
 
 # number of obs used in objective function - 3 boxes and 3 variables (weighted equally)
 nobs=nm.masked_invalid(nref).count()+nm.masked_invalid(fref).count()+nm.masked_invalid(lref).count()
+
+if PRINTREF:   
+    # Print out reference values
+    if R_np==16:
+        print('Nitrate reference values are: ',np.str(np.round(nref,3)),' mmol/m3.')
+        print('Nitrate st. deviation values are: ',np.str(np.round(nstd,3)),' mmol/m3.')
+    else:
+        print('Phosphate reference values are: ',np.str(np.round(nref,3)),' mmol/m3.')
+        print('Phosphate st. deviation values are: ',np.str(np.round(nstd,3)),' mmol/m3.')
+    print('Total Iron reference values are: ',np.str(np.round(fref,3)),' umol/m3.')
+    print('Total Iron st. deviation values are: ',np.str(np.round(fstd,3)),' umol/m3.')
+    print('Total Ligand reference values are: ',np.str(np.round(lref,3)),' umol/m3.')
+    print('Total Ligand st. deviation values are: ',np.str(np.round(lstd,3)),' umol/m3.')
 
 # %% 2. MODEL OUTPUT: Run experiments that save the output to a file, or load previous runs from files.
 if RUNMODEL: # Only run the model if true.
@@ -235,25 +265,12 @@ else:
         except FileNotFoundError:
             print('Could not find CSV or DAT model output! Confirm filenames or set RUNMODEL to "True"')
             raise
-    
-'''    
-# Print out reference values
-if R_np==16:
-    print('Nitrate reference values are: ',np.str(np.round(nref,3)))
-    print('Nitrate stdeviation values are: ',np.str(np.round(nstd,3)))
-else:
-    print('Phosphate reference values are: ',np.str(np.round(nref,3)))
-    print('Phosphate stdeviation values are: ',np.str(np.round(nstd,3)))
-print('Total Iron reference values are: ',np.str(np.round(fref,3)))
-print('Total Iron stdeviation values are: ',np.str(np.round(fstd,3)))
-print('Total Ligand reference values are: ',np.str(np.round(lref,3)))
-print('Total Ligand stdeviation values are: ',np.str(np.round(lstd,3)))
-'''
 
-# %% 3. OBJECTIVE FUNCTION: Calculate objective function score and benchmark value
-    
+# %% 3. ANALYSIS: Calculate observational range, model-data comparison score, bulk ligand residence time, and uniform ligand benchmark value
+
+# Model-data comparison score
 jovern = np.exp(-1*(ncost+fcost+lcost)/nobs) 
-# Seperate contributions (multiply to recover full jovern)
+# Seperate contributions (multiply to recover full score)
 jovernn = np.exp(-1*(ncost)/nobs) 
 jovernf = np.exp(-1*(fcost)/nobs) 
 jovernl = np.exp(-1*(lcost)/nobs) 
@@ -273,6 +290,7 @@ fcostcntrl=utils.calc_cost(np.array((fcntrl[0,tlen]     ,fcntrl[1,tlen]     ,fcn
 lcostcntrl=utils.calc_cost(np.array((lcntrl[0,tlen]     ,lcntrl[1,tlen]     ,lcntrl[2,tlen])),lref,lstd)
 
 jovern_fixed1nmlig=np.exp(-1*(ncostcntrl+fcostcntrl+lcostcntrl)/nobs) 
+
 # Seperate contributions (multiply to recover full jovern)
 jovernn_fixed1nmlig = np.exp(-1*(ncostcntrl)/nobs) 
 jovernf_fixed1nmlig = np.exp(-1*(fcostcntrl)/nobs) 
@@ -292,20 +310,11 @@ ltrest=np.sort(np.array((
         np.max((np.tile(10**data_goverl,(2,1))/np.tile(np.array((1e-5,1e-4))[:,np.newaxis],(1,2))))
         ))/(86400*365))
 
-
-# %% 4. PLOTS
-mp.rcParams['xtick.labelsize'] = 14
-mp.rcParams['ytick.labelsize'] = 14 
-
-len_xaxis,len_yaxis = 4,4 #fix here your numbers
-xspace, yspace = .9, .9 # change the size of the void border here.
-x_fig,y_fig = len_xaxis / xspace, len_yaxis / yspace
-
 # Get medians of model results along lambda/gamma contours
 gaovla_average=np.geomspace(0.1,1e10,2*nincs)
 
 # Bin the data according to equal/similar values for gamma/lambda by MEDIAN/MADEV
-# tried Mean and STDev instead, prety much the same plot, but required quite a lot of arbitrary babysitting
+# tried Mean and STDev instead, prety much the same plot, did require quite a lot of arbitrary babysitting
 idx             = np.digitize(gamma_over_lambda,gaovla_average,right=True)
 nens            = np.asarray([np.count_nonzero(idx[idx==ivar]) for ivar in range(len(gaovla_average))])
 jovern_average  = np.asarray([np.median(jovern   [idx==ivar])  for ivar in range(len(gaovla_average))])
@@ -340,12 +349,22 @@ exp_spread      = np.asarray([utils.mad(export   [idx==ivar])  for ivar in range
 exp1_spread     = np.asarray([utils.mad(exp1     [idx==ivar])  for ivar in range(len(gaovla_average))])
 exp2_spread     = np.asarray([utils.mad(exp2     [idx==ivar])  for ivar in range(len(gaovla_average))])
 
-colimits=np.array((\
-       np.min(np.log10(gaovla_average[np.log10(nso_average)==np.nanmin(np.log10(nso_average))])),
+# Region of gamma/lambda where macro- and micro-nutrients co-limit production in different spatial regions
+colimits=np.array((       np.min(np.log10(gaovla_average[np.log10(nso_average)==np.nanmin(np.log10(nso_average))])),
        np.max(np.log10(gaovla_average[exp_average<=2.0]))
        ))
 
-# %% Fig3: Model illustration
+#%% 4. PLOTS
+
+mp.rcParams['xtick.labelsize'] = 14
+mp.rcParams['ytick.labelsize'] = 14 
+
+len_xaxis,len_yaxis = 4,4 #fix here your numbers
+xspace, yspace = .9, .9 # change the size of the void border here.
+x_fig,y_fig = len_xaxis / xspace, len_yaxis / yspace
+
+
+# Fig3: Model illustration using single timeseries
 example_gaovla = 4500
 example_gamma  = np.array((5e-5*106,))
 example_lambda = np.array((1/((example_gamma/106)/example_gaovla)))
@@ -392,7 +411,7 @@ f3ax1.legend(frameon=False,fontsize=14)
 f3ax1.set_ylim(top=np.ceil(np.max(f3ax1.get_ylim())/10)*10)
 f3ax1.set_xlim(left=-3)
 f3ax1.xaxis.set_major_formatter(FormatStrFormatter('%.1f'))
-f3ax1.set_ylabel("Macronutrient\nConcentration\n[$\mu$mol/kg]",fontsize=14)
+f3ax1.set_ylabel("Macronutrient\nConcentration\n[mmol m$^{-3}$]",fontsize=14)
 f3ax1.text(-5,np.max(f3ax1.get_ylim()),'(a)',fontsize=16)
 
 # Ligands
@@ -407,7 +426,7 @@ f3ax2.set_ylim(top=3)
 f3ax2.set_xlim(left=-3)
 f3ax2.xaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 f3ax2.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
-f3ax2.set_ylabel("Ligand\nConcentration\n[nmol/kg]",fontsize=14)
+f3ax2.set_ylabel("Ligand\nConcentration\n[$\mu$mol m$^{-3}$]",fontsize=14)
 #f3ax2.set_xlabel("Model time [log$_{10}$(yrs)]",fontsize=14)
 f3ax2.text(-5,np.max(f3ax2.get_ylim()),'(b)',fontsize=16)
 
@@ -423,7 +442,7 @@ f3ax3.set_ylim(top=np.ceil(np.max(f3ax3.get_ylim())))
 f3ax3.set_xlim(left=-3)
 f3ax3.xaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 f3ax3.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
-f3ax3.set_ylabel("Iron\nConcentration\n[nmol/kg]",fontsize=14)
+f3ax3.set_ylabel("Iron\nConcentration\n[$\mu$mol m$^{-3}$]",fontsize=14)
 f3ax3.text(-5,np.max(f3ax3.get_ylim()),'(c)',fontsize=16)
 
 f3ax4.plot(np.log10(timeseries_tim),timeseries_exp,color='firebrick',linewidth=5,label="\"Southern\"+\"Atlantic\"")
@@ -432,7 +451,7 @@ f3ax4.set_ylim(top=np.ceil(np.max(f3ax4.get_ylim())))
 f3ax4.set_xlim(left=-3)
 f3ax4.xaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 f3ax4.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
-f3ax4.set_ylabel("Total Export\nProduction\n[GtC/yr]",fontsize=14)
+f3ax4.set_ylabel("Total Export\nProduction\n[GtC yr$^{-1}$]",fontsize=14)
 f3ax4.set_xlabel("Model time [log$_{10}$(yrs)]",fontsize=14)
 f3ax4.text(-5,np.max(f3ax4.get_ylim()),'(d)',fontsize=16)
 
@@ -440,7 +459,16 @@ plt.show()
 fig3.savefig('illustration_of_feedback.'+figfmt,format=figfmt,facecolor=fig3.get_facecolor(), edgecolor='none',bbox_inches='tight')
 plt.close()
 
-# %% Figure 4: 10,000 model simulations nutrient and export fluxes
+# Initially, the model is iron limited globally with elevated macronutrients in both "Atlantic Ocean" and "Southern Ocean" surface boxes (a). Relatively high iron delivery to the "Atlantic Ocean" box leads to an initial rise in productivity (d) and depletion of surface macronutrients. This drives ligand production (b), allowing accumulation of a standing stock of deep ocean iron (c). In the following centuries, macronutrients stay depleted with elevated productivity, and ligand levels converge towards steady state due to transport and loss processes. 
+# 
+# In contrast, lower iron input to the "Southern Ocean" box cannot support rapid macronutrient drawdown. On longer timescales, as ligand levels increase throughout the ocean, upwelled chelated iron drives a gradual incomplete reduction of surface macronutrients. 
+# 
+# Steady state is reached after 1000 years. The "Southern Ocean" box is iron-limited (c) with incomplete macronutrient use (a) fueled by iron supply from the deep ocean, while the "Atlantic Ocean" box is macronutrient limited, with sufficient iron to fully consume macronutrients primarily delivered by the overturning circulation.
+# 
+# An emergent positive feedback promotes global-scale iron and macronutrient co-limitation.
+
+#%% Figure 4: 10,000 model simulations nutrient and export fluxes
+
 grid_gam   =   np.reshape(gamma,np.shape(grid_gamma))
 grid_lt    =1/(np.reshape(inv_lambda ,np.shape(grid_gamma))*3e7)
 grid_gaovla=   np.reshape(gamma_over_lambda,np.shape(grid_gamma))
@@ -481,10 +509,10 @@ f4ax2.set_ylim(bottom=-2,top=2)
 
 # Change plot appearence
 if R_np==16:
-    f4ax2.set_ylabel('Surface-average Nitrate\nConcentration [log$_{10}$(umol/kg)]',fontsize=14)
+    f4ax2.set_ylabel('Surface-average Nitrate\nConcentration [log$_{10}$(mmol m$^{-3}$)]',fontsize=14)
     f4ax2.text(np.min(np.log10(gaovla_average)),np.max(f4ax2.get_ylim())-0.25,'Nitrate',color=mycm(10),fontsize=14)
 else:
-    f4ax2.set_ylabel('Surface-average Phosphate\nConcentration [log$_{10}$(umol/kg)]',fontsize=14)
+    f4ax2.set_ylabel('Surface-average Phosphate\nConcentration [log$_{10}$(mmol m$^{-3}$)]',fontsize=14)
     f4ax2.text(np.log10(gaovla_average),np.max(f4ax2.get_ylim())-0.3,'Phosphate',color=mycm(10),fontsize=14)
 
 
@@ -501,7 +529,7 @@ f4ax2a.fill_between(np.log10(gaovla_average),np.log10(fsurf_average-fsurf_spread
 
 # Change plot appearence
 f4ax2a.set_ylim(bottom=-6,top=6)
-f4ax2a.set_ylabel('Surface-average Iron and Ligand\nConcentration [log$_{10}$(nmol/kg)]',fontsize=14)
+f4ax2a.set_ylabel('Surface-average Iron and Ligand\nConcentration [log$_{10}$($\mu$mol m$^{-3}$)]',fontsize=14)
 f4ax2a.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 
 # Co limitation zone
@@ -538,7 +566,7 @@ f4ax3.plot(np.log10(gaovla_average),exp_average+exp_spread,'firebrick',label="To
 f4ax3.fill_between(np.log10(gaovla_average),(exp_average-exp_spread),(exp_average+exp_spread),color='salmon')
 
 # Change plot appearence
-f4ax3.set_ylabel('Export Production [GtC/yr]',fontsize=14)
+f4ax3.set_ylabel('Export Production [GtC yr$^{-1}$]',fontsize=14)
 f4ax3.set_xlabel('log$_{10}$($\gamma/\lambda$) [s]',fontsize=14)
 f4ax3.set_xlim(left=-4,right=10)
 f4ax3.xaxis.set_ticks(np.arange(-4,12,2))
@@ -573,12 +601,18 @@ plt.show()
 fig4.savefig('ensemble_nutrients_export_plot.'+figfmt,format=figfmt,facecolor=fig4.get_facecolor(), edgecolor='none',bbox_inches='tight')
 plt.close()
 
-# %% Figure 5: 10,000 model simulations model-data comparison
+# It is notable that the concentrations and rates of microbial production converge to a tight curve as a function of gamma/lambda while representing numerous combinations of individual gamma and lambda values, as well as a range of random arbitrary initial conditions. In other words, the outcomes are robust and predictable for any given gamma/lambda, and independent of initial conditions: the feedback restores the degree of biological limitation between macronutrients and iron for the specific value of gamma/lambda.
+# 
+# Guided by these data, the experiments can be partitioned into three regimes: 
+# (i) iron-replete (macronutrient limited) simulations, (ii) iron-limited (macronutrient replete) simulations, and (iii) iron and macronutrient co-limited simulations (region shaded grey).
+
+#%% Figure 5: 10,000 model simulations model-data comparison
+
 jgrid =np.reshape(jovern,np.shape(grid_gamma))
 pgrid =np.reshape(pstar ,np.shape(grid_gamma))
 
-fig5, (f5ax1,f5ax2) = plt.subplots(figsize=(2.5*x_fig, y_fig),ncols=2,gridspec_kw={'width_ratios': [1.4,1.2]})
-#fig5, (f5ax1,f5ax2,f5ax3) = plt.subplots(figsize=(4*x_fig, y_fig),ncols=3,gridspec_kw={'width_ratios': [1.4, 1.2, 1.2]})
+#fig5, (f5ax1,f5ax2) = plt.subplots(figsize=(2.5*x_fig, y_fig),ncols=2,gridspec_kw={'width_ratios': [1.4,1.2]})
+fig5, (f5ax1,f5ax2,f5ax3) = plt.subplots(figsize=(4*x_fig, y_fig),ncols=3,gridspec_kw={'width_ratios': [1.4, 1.2, 1.2]})
 
 fig5.patch.set_facecolor('None')
 
@@ -616,114 +650,71 @@ f5ax2.set_ylabel('Model-data comparison score (S)',fontsize=14)
 f5ax2.set_xlabel('log$_{10}$($\gamma/\lambda$) [s]',fontsize=14)
 f5ax2.set_xlim(left=-4,right=10)
 f5ax2.xaxis.set_ticks(np.arange(-4,12,2))
-f5ax2.set_ylim(bottom=-0.05,top=1)
+f5ax2.set_ylim(bottom=-0.05,top=1.05)
 f5ax2.xaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 
 # Plot horizontal line where cost function uses the value for 1nm fixed ligand concentration
-f5ax2.annotate(s='', xy=(np.min(f5ax2.get_xlim()),jovern_fixed1nmlig,), xytext=(np.log10(np.min(gaovla_average[np.logical_and(gaovla_average>gaovla_average[np.nanargmax(jovern_average)],jovern_average<=jovern_fixed1nmlig)])),jovern_fixed1nmlig), arrowprops=dict(color=mycm(10),linestyle='--',arrowstyle='-|>,head_width=0.5,head_length=0.5',shrinkA=0, shrinkB=0, linewidth=2))
+#f5ax2.annotate(s='', xy=(np.min(f5ax2.get_xlim()),jovern_fixed1nmlig,), xytext=(np.log10(np.min(gaovla_average[np.logical_and(gaovla_average>gaovla_average[np.nanargmax(jovern_average)],jovern_average<=jovern_fixed1nmlig)])),jovern_fixed1nmlig), arrowprops=dict(color=mycm(10),linestyle='--',arrowstyle='-|>,head_width=0.5,head_length=0.5',shrinkA=0, shrinkB=0, linewidth=2))
+f5ax2.axhline(jovern_fixed1nmlig,linestyle='--',color=mycm(10))
 
 # Plot data-based constraint of gamma/lambda
 f5ax2.annotate(s='', xy=(np.max(data_goverl),np.min(f5ax2.get_ylim())), xytext=(np.min(data_goverl),np.min(f5ax2.get_ylim())), arrowprops=dict(color='black',arrowstyle='<|-|>,head_width=0.5,head_length=0.5', shrinkA=0, shrinkB=0, linewidth=2))
 
-f5ax2.text(-7,1.2,'(b)',fontsize=16)
-f5ax2.text(8,1.06,'Iron replete\n(macronutrient\nlimited)',horizontalalignment='center',fontsize=14)
-f5ax2.text((colimits[1]+colimits[0])/2,1.15,'Co-\nlimited',rotation=-90,horizontalalignment='center',fontsize=14)
-f5ax2.text(-2,1.06,'Iron limited\n(macronutrient\nreplete)',horizontalalignment='center',fontsize=14)
-
-# Change color of y-axis and labels
-f5ax2.spines['left'].set_color(mycm(10))
-f5ax2.yaxis.label.set_color(mycm(10))
-f5ax2.tick_params(axis='y', colors=mycm(10))
-
-# Second axes for P* that shares the same x-axis
-f5ax2a = f5ax2.twinx()
-plt.plot(np.log10(gaovla_average),(pstar_average-pstar_spread),color='firebrick',linestyle='-.')
-plt.plot(np.log10(gaovla_average),(pstar_average+pstar_spread),color='firebrick',linestyle='-.')
-plt.fill_between(np.log10(gaovla_average),(pstar_average-pstar_spread),(pstar_average+pstar_spread),color='salmon')
-f5ax2a.set_ylabel('Nutrient usage efficiency [fraction]',fontsize=14)  
-f5ax2a.set_ylim(bottom=-0.05,top=1.05)
-
-# Change color of y-axis and labels
-f5ax2a.spines['right'].set_color('firebrick')
-f5ax2a.yaxis.label.set_color('firebrick')
-f5ax2a.tick_params(axis='y', colors='firebrick')
-
-# Optimum model macronutrient usage efficiency
-f5ax2a.annotate(s='', xy=(np.max(f5ax2a.get_xlim()),pstar_average[np.nanargmax(jovern_average)],), xytext=(np.log10(gaovla_average[np.nanargmax(jovern_average)]),pstar_average[np.nanargmax(jovern_average)]), arrowprops=dict(color='firebrick',linestyle=':',arrowstyle='-|>,head_width=0.5,head_length=0.5', shrinkA=0, shrinkB=0, linewidth=2))
-
-# The range for macronutrient usage efficiency values bounded by jovern>=jovern_fixed1nmlig is 
-pstar_range=np.array((\
-                np.max(pstar_average[np.logical_and(gaovla_average<gaovla_average[np.nanargmax(jovern_average)],jovern_average<=jovern_fixed1nmlig)]),
-                np.min(pstar_average[np.logical_and(gaovla_average>gaovla_average[np.nanargmax(jovern_average)],jovern_average<=jovern_fixed1nmlig)])
-                ))
+f5ax2.text(-7,1.25,'(b)',fontsize=16)
+f5ax2.text(8,1.09,'Iron replete\n(macronutrient\nlimited)',horizontalalignment='center',fontsize=14)
+f5ax2.text((colimits[1]+colimits[0])/2,1.18,'Co-\nlimited',rotation=-90,horizontalalignment='center',fontsize=14)
+f5ax2.text(-2,1.09,'Iron limited\n(macronutrient\nreplete)',horizontalalignment='center',fontsize=14)
 
 # Co limitation zone
-f5ax2a.fill_between((colimits[0],colimits[1]),
-                  np.min(f5ax2a.get_ylim()), np.max(f5ax2a.get_ylim()),color='#cccccc',zorder=-1)
-
-# move ax in front
-f5ax2.set_zorder(f5ax2a.get_zorder() + 1)
-f5ax2.patch.set_visible(False)
-
-'''
-f5ax3.plot(np.log10(gaovla_average),jovernl_average-jovernl_spread,color=mycm(128))
-f5ax3.plot(np.log10(gaovla_average),jovernl_average+jovernl_spread,color=mycm(128))
-f5ax3.fill_between(np.log10(gaovla_average), jovernl_average-jovernl_spread, jovernl_average+jovernl_spread,color=mycm(150))
-#f5ax3.axhline(jovern_lsep_fixed1nmlig,linestyle='--',color='orange')
-f5ax3.plot(np.log10(gaovla_average),jovernf_average-jovernf_spread,'firebrick',zorder=3)
-f5ax3.plot(np.log10(gaovla_average),jovernf_average+jovernf_spread,'firebrick',zorder=3)
-f5ax3.fill_between(np.log10(gaovla_average), jovernf_average-jovernf_spread, jovernf_average+jovernf_spread,color='salmon',zorder=3)
-#f5ax3.axhline(jovern_fsep_fixed1nmlig,linestyle='--',color='red')
-f5ax3.plot(np.log10(gaovla_average),jovernn_average-jovernn_spread,color=mycm(10),zorder=3)
-f5ax3.plot(np.log10(gaovla_average),jovernn_average+jovernn_spread,color=mycm(10),zorder=3)
-f5ax3.fill_between(np.log10(gaovla_average), jovernn_average-jovernn_spread, jovernn_average+jovernn_spread,color=mycm(50),zorder=3)
-#f5ax3.axhline(jovern_nsep_fixed1nmlig,linestyle='--',color='blue')
+f5ax2.fill_between((colimits[0],colimits[1]),
+                  np.min(f5ax2.get_ylim()), np.max(f5ax2.get_ylim()),color='#cccccc',zorder=-1)
 
 # Plot vertical lines for lambda/gamma value that minimizes the cost function
 f5ax3.axvline(np.log10(gaovla_average[np.nanargmax(jovern_average)]),linestyle='--',color='black')
+f5ax3.plot(np.log10(gaovla_average),(pstar_average-pstar_spread),color='firebrick',linestyle='-.')
+f5ax3.plot(np.log10(gaovla_average),(pstar_average+pstar_spread),color='firebrick',linestyle='-.')
+f5ax3.fill_between(np.log10(gaovla_average),(pstar_average-pstar_spread),(pstar_average+pstar_spread),color='salmon')
 
-# Plot horizontal lines for the fixed 1nm control run
-f5ax3.axhline(jovernn_fixed1nmlig,linestyle='--',color=mycm(10))
-f5ax3.axhline(jovernf_fixed1nmlig,linestyle='--',color='firebrick')
-f5ax3.axhline(jovernl_fixed1nmlig,linestyle='--',color=mycm(128))
+# Change plot appearence
+f5ax3.set_ylabel('Nutrient usage efficiency [fraction]',fontsize=14)  
+f5ax3.set_xlabel('log$_{10}$($\gamma/\lambda$) [s]',fontsize=14)
+f5ax3.set_xlim(left=-4,right=10)
+f5ax3.xaxis.set_ticks(np.arange(-4,12,2))
+f5ax3.set_ylim(bottom=-0.05,top=1.05)
+f5ax3.xaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+
+# Optimum model macronutrient usage efficiency
+#f5ax3.annotate(s='', xy=(np.max(f5ax3.get_xlim()),pstar_average[np.nanargmax(jovern_average)],), xytext=(np.log10(gaovla_average[np.nanargmax(jovern_average)]),pstar_average[np.nanargmax(jovern_average)]), arrowprops=dict(color='firebrick',linestyle=':',arrowstyle='-|>,head_width=0.5,head_length=0.5', shrinkA=0, shrinkB=0, linewidth=2))
+f5ax3.axhline(pstar_average[np.nanargmax(jovern_average)],linestyle='--',color='firebrick')
+
+# Plot data-based constraint of gamma/lambda
+f5ax2.annotate(s='', xy=(np.max(data_goverl),np.min(f5ax2.get_ylim())), xytext=(np.min(data_goverl),np.min(f5ax2.get_ylim())), arrowprops=dict(color='black',arrowstyle='<|-|>,head_width=0.5,head_length=0.5', shrinkA=0, shrinkB=0, linewidth=2))
+
+# Co limitation zone
+f5ax3.fill_between((colimits[0],colimits[1]),
+                  np.min(f5ax3.get_ylim()), np.max(f5ax3.get_ylim()),color='#cccccc',zorder=-1)
+
+f5ax3.text(-7,1.25,'(c)',fontsize=16)
+f5ax3.text(8,1.09,'Iron replete\n(macronutrient\nlimited)',horizontalalignment='center',fontsize=14)
+f5ax3.text((colimits[1]+colimits[0])/2,1.18,'Co-\nlimited',rotation=-90,horizontalalignment='center',fontsize=14)
+f5ax3.text(-2,1.09,'Iron limited\n(macronutrient\nreplete)',horizontalalignment='center',fontsize=14)
 
 # Plot data-based constraint of gamma/lambda
 f5ax3.annotate(s='', xy=(np.max(data_goverl),np.min(f5ax2.get_ylim())), xytext=(np.min(data_goverl),np.min(f5ax2.get_ylim())), arrowprops=dict(color='black',arrowstyle='<|-|>,head_width=0.5,head_length=0.5', shrinkA=0, shrinkB=0, linewidth=2))
 
-f5ax3.set_ylabel('Model-data comparison score (S)',fontsize=14)
-f5ax3.set_xlabel('log$_{10}$($\gamma/\lambda$) [s]',fontsize=14)
-f5ax3.set_xlim(left=-4,right=10)
-f5ax3.xaxis.set_ticks(np.arange(-4,12,2))
-f5ax3.set_ylim(bottom=-0.05,top=1)
-f5ax3.xaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+# The range for macronutrient usage efficiency values bounded by jovern>=jovern_fixed1nmlig is 
+pstar_range=np.array((                np.max(pstar_average[np.logical_and(gaovla_average<gaovla_average[np.nanargmax(jovern_average)],jovern_average<=jovern_fixed1nmlig)]),
+                np.min(pstar_average[np.logical_and(gaovla_average>gaovla_average[np.nanargmax(jovern_average)],jovern_average<=jovern_fixed1nmlig)])
+                ))
 
-# Co limitation zone
-f5ax3.fill_between((colimits[0],colimits[1]),
-                  np.min(f5ax2a.get_ylim()), np.max(f5ax2a.get_ylim()),color='#cccccc',zorder=-1)
-
-if R_np==16:
-    f5ax3.text(-1,0,'Nitrate',color=mycm(10),horizontalalignment='center',fontsize=14)
-else:
-    f5ax3.text(-1,0,'Phosphate',color=mycm(10),horizontalalignment='center',fontsize=14)
-
-f5ax3.text(-1,0.82,'Iron',color='firebrick',horizontalalignment='center',fontsize=14)
-f5ax3.text(-1,0.3,'Ligand',color=mycm(128),horizontalalignment='center',fontsize=14)
-
-
-f5ax3.text(-7,1.2,'(c)',fontsize=16)
-f5ax3.text(8,1.06,'Iron replete\n(macronutrient\nlimited)',horizontalalignment='center',fontsize=14)
-f5ax3.text((colimits[1]+colimits[0])/2,1.15,'Co-\nlimited',rotation=-90,horizontalalignment='center',fontsize=14)
-f5ax3.text(-2,1.06,'Iron limited\n(macronutrient\nreplete)',horizontalalignment='center',fontsize=14)
-'''
 # Can adjust the subplot size
 plt.subplots_adjust(wspace=0.4)
-
-# Manuallly move fig (b) left a bit
-pos = f5ax2.get_position().bounds
-tmp=pos[0]-0.075*pos[2]
-f5ax2.set_position([tmp,pos[1],pos[2],pos[3]])
 
 plt.show()
 fig5.savefig('ensemble_model_data_plot.'+figfmt,format=figfmt,facecolor=fig5.get_facecolor(), edgecolor='none',bbox_inches='tight')
 plt.close()
 
+# We scored ensemble members by quantitative comparison to oceanic observations (S: possible range 0--1).
+# Scores were compared to a benchmark evaluated from a model simulation where ligand concentration was held fixed at a uniform, global value of 1nM. Dynamic ligand simulations with model-data comparison scores greater than the benchmark value are outperforming the standard parameterization. The best scores are obtained in a band of intermediate gamma/lambda with moderate levels of macronutrients, iron, and ligands. 
+# 
+# Macronutrient use efficiency was diagnosed as the fraction of macronutrients transported from the surface to the deep by biological activity. Efficiency of macronutrient use is positively correlated with gamma/lambda, and reflects the pattern of export production in the low iron, upwelling "Southern Ocean" box.
