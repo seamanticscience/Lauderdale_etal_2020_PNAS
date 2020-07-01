@@ -1,5 +1,11 @@
-# Lauderdale_ligand_iron_microbe_feedback
-Box model, processing routines, and large model ensemble data for ligand-iron-microbe feedback paper
+# Lauderdale_etal_2020_PNAS
+[![DOI](https://zenodo.org/badge/207910435.svg)](https://zenodo.org/badge/latestdoi/207910435)
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/seamanticscience/Lauderdale_etal_2020_PNAS?color=1b3370)
+![GitHub last commit](https://img.shields.io/github/last-commit/seamanticscience/Lauderdale_etal_2020_PNAS?color=f44323)
+![GitHub License](https://img.shields.io/github/license/seamanticscience/Lauderdale_etal_2020_PNAS?color=ffa500)
+<a href="https://doi.org/10.1073/pnas.1917277117"><img src="http://img.shields.io/badge/paper%20link-doi:10.1073%2Fpnas.1917277117-lightgrey.svg" alt="Link to paper at https://doi.org/10.1073/pnas.1917277117"></a>
+
+Box model code, processing routines, and model ensemble data for the paper "Microbial feedbacks optimize ocean iron availability" by Jonathan Maitland Lauderdale, Rogier Braakman, Gaël Forget, Stephanie Dutkiewicz, and Michael J. Follows in Proceedings of the National Academy of Sciences.
 
 Model parameters are set in `comdeck.h`, while the main model routines are in `boxmodel.f`. Compile the model with `f2py` to generate a python module:
 
