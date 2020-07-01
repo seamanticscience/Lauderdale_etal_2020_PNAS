@@ -496,9 +496,9 @@ f4ax1.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 f4ax1.text(-8.5,-5.75,'(a)',fontsize=16)
     
 # Macronutrients
-f4ax2.plot(np.log10(gaovla_average),np.log10(np.maximum(nsurf_average-nsurf_spread,0.021)),color=mycm(10))
+f4ax2.plot(np.log10(gaovla_average),np.log10(nsurf_average-nsurf_spread),color=mycm(10))
 f4ax2.plot(np.log10(gaovla_average),np.log10(nsurf_average+nsurf_spread),color=mycm(10))
-f4ax2.fill_between(np.log10(gaovla_average),np.log10(np.maximum(nsurf_average-nsurf_spread,0.021)),np.log10(nsurf_average+nsurf_spread),color=mycm(50))
+f4ax2.fill_between(np.log10(gaovla_average),np.log10(nsurf_average-nsurf_spread),np.log10(nsurf_average+nsurf_spread),color=mycm(50))
 
 f4ax2.set_xlabel('log$_{10}(\gamma/\lambda)$ [s]',fontsize=14)
 f4ax2.set_xlim(left=-4,right=10)
