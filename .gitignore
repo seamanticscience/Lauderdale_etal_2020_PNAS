@@ -1,0 +1,5 @@
+nutboxmod.cpython-*
+
+/.ipynb_checkpoints/
+
+/__pycache__/
