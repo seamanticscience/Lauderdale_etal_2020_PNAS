@@ -10,19 +10,24 @@
 # In a hypothetical watermass where ligand abundance is initially very low, Fe(III) is largely insoluble, but a small population of microbes subsist. Their turnover produces ligands such as siderophores, excreted organic carbon, or chelating detritus. Greater ligand abundance retains more iron in solution, incrementally relieving iron limitation, promoting further biological production, and so on.
 # Eventually, other requirements such as macronutrients, become limiting, and additional iron no longer increases productivity. At appropriate time and space scales, the global ligand pool is regulated, supporting "just enough" iron to match availability of other resources redistributed by ocean circulation, maximizing overall nutrient consumption and global productivity. 
 
+# In[1]:
+
+
 import csv
 import matplotlib.pyplot as plt
 import cmocean           as cm
+import glob              as gb
 import matplotlib        as mp
 import numpy             as np
 import numpy.ma          as nm
 import pandas            as pd
+import warnings          as ws
 from matplotlib.ticker     import FormatStrFormatter
 from itertools             import zip_longest
 
 # nutboxmod provides "model" which is the fortran model compiled with "f2py"
 import importlib.util
-spec = importlib.util.spec_from_file_location("nutboxmod", "/Users/jml1/GitHub/Lauderdale_ligand_iron_microbe_feedback/nutboxmod.cpython-37m-darwin.so")
+spec = importlib.util.spec_from_file_location("nutboxmod", gb.glob("nutboxmod*so")[0])
 nutboxmod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(nutboxmod)
 
@@ -32,15 +37,25 @@ import utils
 figfmt='pdf'
 #figfmt='eps'
 
-# Set to True, the script will call the box model nincs^2 times (first, must have compiled boxmodel.f with f2py;  
-#an ensemble of integrations could take a long time), set to False and it will load previously run results from 
-#the paper and plot them
+
+# **Set to True, the script will call the box model nincs^2 times (first, must have compiled boxmodel.f with f2py;  an ensemble of integrations could take a long time), set to False and it will load previously run results from the paper and plot them**
+
+# In[2]:
+
+
 RUNMODEL=False
 
-# %% 1. Model parameters and initial conditions
-#  The box model has three boxes linked by an overturning circulation: an upwelling box with low iron input analagous to HNLC regions like the Southern Ocean, and a deep water formation region with significant iron input analagous to the Atlantic Ocean. Iron-binding ligands are produced by organic matter turnover, and lost by microbial degradation.
+
+# ## 1. Model parameters and initial conditions
+# 
+# <img src="boxmodel_schematic.png" width="350" />
+# 
+# The box model has three boxes linked by an overturning circulation: an upwelling box with low iron input analagous to HNLC regions like the Southern Ocean, and a deep water formation region with significant iron input analagous to the Atlantic Ocean. Iron-binding ligands are produced by organic matter turnover, and lost by microbial degradation.
 # 
 # Set a few parameters:
+
+# In[3]:
+
 
 # Number of increments in parameter space
 nincs=100
@@ -77,7 +92,8 @@ psi=20.0e6 # Sv
 # Biological production maximum rate per year
 alpha_yr=6e-6
 
-# Surface iron input rate (Atlantic receives 1.00xdep [g/m2/yr] while SO receives 0.01xdep)
+
+# **Surface iron input rate (Atlantic receives 1.00xdep [g/m2/yr] while SO receives 0.01xdep)**
 # 
 # Default value in the model (7.0) is taken from the box model paper (Table 1) in Parekh et al (2004) with a asymetry value of 0.01. Data from Mahowald et al (2006) suggests:\
 # • Whole NA: 0.25 gFE m-2 yr-1\
@@ -88,13 +104,21 @@ alpha_yr=6e-6
 # • Whole SH: 0.0033 gFE m-2 yr-1
 # 
 
+# In[4]:
+
+
 # Dust deposition in g Fe m-2 year-1
 dustdep=0.15
 # Hydrothermal vent input of 1 Gmol/yr (Tagliabue et al., 2010)
 # mol Fe/yr * g/mol * 1/area  == g Fe m-2 year-1....divide by 2.5e-3 because fe_sol is multiplied again within the box model.
 ventdep=(1e9*56)/(area[2]*0.0025)
 
-# Assign gamma and lambda parameters systematically to cover parameter space. Use log spacing to get good data coverage at the really small values*
+
+# **Assign gamma and lambda parameters systematically to cover parameter space. Use log spacing to get good data coverage at the really small values**
+
+# In[5]:
+
+
 #gamma_fe is in phosphate units, not carbon units...divide by RCP=106 to get values referenced in paper
 # lt_rate is in years, then converted to seconds
 grid_lt_rate,grid_gamma=np.meshgrid(np.geomspace(0.1,1000,nincs),np.geomspace(1e-5,10,nincs))
@@ -106,7 +130,11 @@ gamma_over_lambda=(gamma_fe[:niters]/106)/(1/lt_rate[:niters]) # Lambda needs to
 # Deep ocean box lifetime modifier - capture the gradient introduced by photodegradation near the surface and slower loss in the deep ocean
 dlambdadz=0.01
 
+
 # **Assign random initial values of macronutrients, iron, and ligands**
+
+# In[6]:
+
 
 # Phosphate has to be conserved (convert to mol/m3 before volume integrating)
 pinv=nm.sum(np.array((2.1, 2.1, 2.1)) * conv * 1.0e-6 * vol)
@@ -121,7 +149,12 @@ parray=(boxfrac*pinv)/(vol*conv*1e-6)
 farray=np.random.randint(0,100,size=(niters,3)).astype(np.double)
 larray=np.random.randint(0,100,size=(niters,3)).astype(np.double)
 
+
 # **Define global output arrays**
+
+# In[7]:
+
+
 ncost=np.ones((niters,1))
 fcost=np.ones((niters,1))
 lcost=np.ones((niters,1))
@@ -151,9 +184,13 @@ ndo=np.ones((niters,1))
 fdo=np.ones((niters,1))
 ldo=np.ones((niters,1))
 
-# %% Get reference values for model-data comparison
+
+# **Get reference values for model-data comparison**
 # 
 # If World Ocean Atlas or GEOTRACES IDP files are not present, then the values given in Table 1 of the paper are used instead.
+
+# In[8]:
+
 
 # Print out objective function reference values
 PRINTREF=True
@@ -185,7 +222,12 @@ if PRINTREF:
     print('Total Ligand reference values are: ',np.str(np.round(lref,3)),' umol/m3.')
     print('Total Ligand st. deviation values are: ',np.str(np.round(lstd,3)),' umol/m3.')
 
-# %% 2. MODEL OUTPUT: Run experiments that save the output to a file, or load previous runs from files.
+
+# ## 2. MODEL OUTPUT: Run experiments that save the output to a file, or load previous runs from files.
+
+# In[9]:
+
+
 if RUNMODEL: # Only run the model if true.
     ## %% Write input values to a file for future reference (not the control)
     # The initial conditions are also written out at the start of the model output
@@ -193,12 +235,12 @@ if RUNMODEL: # Only run the model if true.
     cvs_d=np.concatenate((parray[:niters],farray[:niters],larray[:niters],gamma_fe[:niters,np.newaxis]/106,lt_rate[:niters,np.newaxis]/3e7,gamma_over_lambda[:niters,np.newaxis]),axis=1)
     export_data = zip_longest(*cvs_d.T, fillvalue = '')
     with open(finname, 'w', encoding="ISO-8859-1", newline='') as myfile:
-          wr = csv.writer(myfile)
-          if R_np==16:
-              wr.writerow(("N1","N2","N3","F1","F2","F3","L1","L2","L3","gamma","1/lambda","gamma_over_lambda"))
-          else:
-              wr.writerow(("P1","P2","P3","F1","F2","F3","L1","L2","L3","gamma","1/lambda","gamma_over_lambda"))
-          wr.writerows(export_data)
+        wr = csv.writer(myfile)
+        if R_np==16:
+            wr.writerow(("N1","N2","N3","F1","F2","F3","L1","L2","L3","gamma","1/lambda","gamma_over_lambda"))
+        else:
+            wr.writerow(("P1","P2","P3","F1","F2","F3","L1","L2","L3","gamma","1/lambda","gamma_over_lambda"))
+        wr.writerows(export_data)
     myfile.close()
     
 # Run experiments
@@ -210,9 +252,9 @@ if RUNMODEL: # Only run the model if true.
     cvs_d=np.concatenate((nso,nna,ndo,fso,fna,fdo,lso,lna,ldo,ncost,fcost,lcost,nlimit,expbox,pstar),axis=1)
     export_data = zip_longest(*cvs_d.T, fillvalue = '')
     with open(foutname, 'w', encoding="ISO-8859-1", newline='') as myfile:
-          wr = csv.writer(myfile)
-          wr.writerow(("nso","nna","ndo","fso","fna","fdo","lso","lna","ldo","ncost","fcost","lcost","nlimit","export1","export2","pstar"))
-          wr.writerows(export_data)
+        wr = csv.writer(myfile)
+        wr.writerow(("nso","nna","ndo","fso","fna","fdo","lso","lna","ldo","ncost","fcost","lcost","nlimit","export1","export2","pstar"))
+        wr.writerows(export_data)
     myfile.close()   
     
     gamma      = gamma_fe[:niters,np.newaxis]/106
@@ -266,7 +308,11 @@ else:
             print('Could not find CSV or DAT model output! Confirm filenames or set RUNMODEL to "True"')
             raise
 
-# %% 3. ANALYSIS: Calculate observational range, model-data comparison score, bulk ligand residence time, and uniform ligand benchmark value
+
+# ## 3. ANALYSIS: Calculate observational range, model-data comparison score, bulk ligand residence time, and uniform ligand benchmark value
+
+# In[10]:
+
 
 # Model-data comparison score
 jovern = np.exp(-1*(ncost+fcost+lcost)/nobs) 
@@ -315,46 +361,59 @@ gaovla_average=np.geomspace(0.1,1e10,2*nincs)
 
 # Bin the data according to equal/similar values for gamma/lambda by MEDIAN/MADEV
 # tried Mean and STDev instead, prety much the same plot, did require quite a lot of arbitrary babysitting
-idx             = np.digitize(gamma_over_lambda,gaovla_average,right=True)
-nens            = np.asarray([np.count_nonzero(idx[idx==ivar]) for ivar in range(len(gaovla_average))])
-jovern_average  = np.asarray([np.median(jovern   [idx==ivar])  for ivar in range(len(gaovla_average))])
-jovernn_average = np.asarray([np.median(jovernn  [idx==ivar])  for ivar in range(len(gaovla_average))])
-jovernf_average = np.asarray([np.median(jovernf  [idx==ivar])  for ivar in range(len(gaovla_average))])
-jovernl_average = np.asarray([np.median(jovernl  [idx==ivar])  for ivar in range(len(gaovla_average))])
-pstar_average   = np.asarray([np.median(pstar    [idx==ivar])  for ivar in range(len(gaovla_average))])
-nsurf_average   = np.asarray([np.median(nsurfmean[idx==ivar])  for ivar in range(len(gaovla_average))])
-fsurf_average   = np.asarray([np.median(fsurfmean[idx==ivar])  for ivar in range(len(gaovla_average))])
-lsurf_average   = np.asarray([np.median(lsurfmean[idx==ivar])  for ivar in range(len(gaovla_average))])
-nso_average     = np.asarray([np.median(nso      [idx==ivar])  for ivar in range(len(gaovla_average))])
-fso_average     = np.asarray([np.median(fso      [idx==ivar])  for ivar in range(len(gaovla_average))])
-lso_average     = np.asarray([np.median(lso      [idx==ivar])  for ivar in range(len(gaovla_average))])
-nna_average     = np.asarray([np.median(nna      [idx==ivar])  for ivar in range(len(gaovla_average))])
-fna_average     = np.asarray([np.median(fna      [idx==ivar])  for ivar in range(len(gaovla_average))])
-lna_average     = np.asarray([np.median(lna      [idx==ivar])  for ivar in range(len(gaovla_average))])
-ndo_average     = np.asarray([np.median(ndo      [idx==ivar])  for ivar in range(len(gaovla_average))])
-fdo_average     = np.asarray([np.median(fdo      [idx==ivar])  for ivar in range(len(gaovla_average))])
-ldo_average     = np.asarray([np.median(ldo      [idx==ivar])  for ivar in range(len(gaovla_average))])
-exp_average     = np.asarray([np.median(export   [idx==ivar])  for ivar in range(len(gaovla_average))])
-exp1_average    = np.asarray([np.median(exp1     [idx==ivar])  for ivar in range(len(gaovla_average))])
-exp2_average    = np.asarray([np.median(exp2     [idx==ivar])  for ivar in range(len(gaovla_average))])
-jovern_spread   = np.asarray([utils.mad(jovern   [idx==ivar])  for ivar in range(len(gaovla_average))])
-jovernn_spread  = np.asarray([utils.mad(jovernn  [idx==ivar])  for ivar in range(len(gaovla_average))])
-jovernf_spread  = np.asarray([utils.mad(jovernf  [idx==ivar])  for ivar in range(len(gaovla_average))])
-jovernl_spread  = np.asarray([utils.mad(jovernl  [idx==ivar])  for ivar in range(len(gaovla_average))])
-pstar_spread    = np.asarray([utils.mad(pstar    [idx==ivar])  for ivar in range(len(gaovla_average))])
-nsurf_spread    = np.asarray([utils.mad(nsurfmean[idx==ivar])  for ivar in range(len(gaovla_average))])
-fsurf_spread    = np.asarray([utils.mad(fsurfmean[idx==ivar])  for ivar in range(len(gaovla_average))])
-lsurf_spread    = np.asarray([utils.mad(lsurfmean[idx==ivar])  for ivar in range(len(gaovla_average))])
-exp_spread      = np.asarray([utils.mad(export   [idx==ivar])  for ivar in range(len(gaovla_average))])
-exp1_spread     = np.asarray([utils.mad(exp1     [idx==ivar])  for ivar in range(len(gaovla_average))])
-exp2_spread     = np.asarray([utils.mad(exp2     [idx==ivar])  for ivar in range(len(gaovla_average))])
+with ws.catch_warnings():
+    ws.simplefilter("ignore", category=RuntimeWarning)
+    idx             = np.digitize(gamma_over_lambda,gaovla_average,right=True)
+    nens            = np.asarray([np.count_nonzero(idx[idx==ivar]) for ivar in range(len(gaovla_average))])
+    jovern_average  = np.asarray([np.median(jovern   [idx==ivar])  for ivar in range(len(gaovla_average))])
+    jovernn_average = np.asarray([np.median(jovernn  [idx==ivar])  for ivar in range(len(gaovla_average))])
+    jovernf_average = np.asarray([np.median(jovernf  [idx==ivar])  for ivar in range(len(gaovla_average))])
+    jovernl_average = np.asarray([np.median(jovernl  [idx==ivar])  for ivar in range(len(gaovla_average))])
+    pstar_average   = np.asarray([np.median(pstar    [idx==ivar])  for ivar in range(len(gaovla_average))])
+    nsurf_average   = np.asarray([np.median(nsurfmean[idx==ivar])  for ivar in range(len(gaovla_average))])
+    fsurf_average   = np.asarray([np.median(fsurfmean[idx==ivar])  for ivar in range(len(gaovla_average))])
+    lsurf_average   = np.asarray([np.median(lsurfmean[idx==ivar])  for ivar in range(len(gaovla_average))])
+    nso_average     = np.asarray([np.median(nso      [idx==ivar])  for ivar in range(len(gaovla_average))])
+    fso_average     = np.asarray([np.median(fso      [idx==ivar])  for ivar in range(len(gaovla_average))])
+    lso_average     = np.asarray([np.median(lso      [idx==ivar])  for ivar in range(len(gaovla_average))])
+    nna_average     = np.asarray([np.median(nna      [idx==ivar])  for ivar in range(len(gaovla_average))])
+    fna_average     = np.asarray([np.median(fna      [idx==ivar])  for ivar in range(len(gaovla_average))])
+    lna_average     = np.asarray([np.median(lna      [idx==ivar])  for ivar in range(len(gaovla_average))])
+    ndo_average     = np.asarray([np.median(ndo      [idx==ivar])  for ivar in range(len(gaovla_average))])
+    fdo_average     = np.asarray([np.median(fdo      [idx==ivar])  for ivar in range(len(gaovla_average))])
+    ldo_average     = np.asarray([np.median(ldo      [idx==ivar])  for ivar in range(len(gaovla_average))])
+    exp_average     = np.asarray([np.median(export   [idx==ivar])  for ivar in range(len(gaovla_average))])
+    exp1_average    = np.asarray([np.median(exp1     [idx==ivar])  for ivar in range(len(gaovla_average))])
+    exp2_average    = np.asarray([np.median(exp2     [idx==ivar])  for ivar in range(len(gaovla_average))])
+    jovern_spread   = np.asarray([utils.mad(jovern   [idx==ivar])  for ivar in range(len(gaovla_average))])
+    jovernn_spread  = np.asarray([utils.mad(jovernn  [idx==ivar])  for ivar in range(len(gaovla_average))])
+    jovernf_spread  = np.asarray([utils.mad(jovernf  [idx==ivar])  for ivar in range(len(gaovla_average))])
+    jovernl_spread  = np.asarray([utils.mad(jovernl  [idx==ivar])  for ivar in range(len(gaovla_average))])
+    pstar_spread    = np.asarray([utils.mad(pstar    [idx==ivar])  for ivar in range(len(gaovla_average))])
+    nsurf_spread    = np.asarray([utils.mad(nsurfmean[idx==ivar])  for ivar in range(len(gaovla_average))])
+    fsurf_spread    = np.asarray([utils.mad(fsurfmean[idx==ivar])  for ivar in range(len(gaovla_average))])
+    lsurf_spread    = np.asarray([utils.mad(lsurfmean[idx==ivar])  for ivar in range(len(gaovla_average))])
+    exp_spread      = np.asarray([utils.mad(export   [idx==ivar])  for ivar in range(len(gaovla_average))])
+    exp1_spread     = np.asarray([utils.mad(exp1     [idx==ivar])  for ivar in range(len(gaovla_average))])
+    exp2_spread     = np.asarray([utils.mad(exp2     [idx==ivar])  for ivar in range(len(gaovla_average))])
 
 # Region of gamma/lambda where macro- and micro-nutrients co-limit production in different spatial regions
-colimits=np.array((       np.min(np.log10(gaovla_average[np.log10(nso_average)==np.nanmin(np.log10(nso_average))])),
-       np.max(np.log10(gaovla_average[exp_average<=2.0]))
-       ))
+#colimits=np.array((\
+#       np.min(np.log10(gaovla_average[np.log10(nso_average)==np.nanmin(np.log10(nso_average))])),
+#       np.max(np.log10(gaovla_average[exp_average<=2.0]))
+#       ))
+# Look for the limits where export production reaches high (near-maximum) levels, ie relieved global iron limitation, 
+# but before global surface nutrients become completely consumed, ie becoming globally iron replete
+tol=0.1
+colimits=np.array((np.log10((       np.min(gaovla_average[np.isclose(exp_average, np.nanmax(exp_average), rtol=tol)]),              
+       np.min(gaovla_average[np.isclose(nso_average, np.nanmin(nso_average), rtol=tol)])                      
+       ))))
 
-#%% 4. PLOTS
+
+# ## 4. PLOTS
+
+# In[11]:
+
 
 mp.rcParams['xtick.labelsize'] = 14
 mp.rcParams['ytick.labelsize'] = 14 
@@ -364,7 +423,11 @@ xspace, yspace = .9, .9 # change the size of the void border here.
 x_fig,y_fig = len_xaxis / xspace, len_yaxis / yspace
 
 
-# Fig3: Model illustration using single timeseries
+# **Fig3: Model illustration using single timeseries**
+
+# In[12]:
+
+
 example_gaovla = 4500
 example_gamma  = np.array((5e-5*106,))
 example_lambda = np.array((1/((example_gamma/106)/example_gaovla)))
@@ -459,6 +522,7 @@ plt.show()
 fig3.savefig('illustration_of_feedback.'+figfmt,format=figfmt,facecolor=fig3.get_facecolor(), edgecolor='none',bbox_inches='tight')
 plt.close()
 
+
 # Initially, the model is iron limited globally with elevated macronutrients in both "Atlantic Ocean" and "Southern Ocean" surface boxes (a). Relatively high iron delivery to the "Atlantic Ocean" box leads to an initial rise in productivity (d) and depletion of surface macronutrients. This drives ligand production (b), allowing accumulation of a standing stock of deep ocean iron (c). In the following centuries, macronutrients stay depleted with elevated productivity, and ligand levels converge towards steady state due to transport and loss processes. 
 # 
 # In contrast, lower iron input to the "Southern Ocean" box cannot support rapid macronutrient drawdown. On longer timescales, as ligand levels increase throughout the ocean, upwelled chelated iron drives a gradual incomplete reduction of surface macronutrients. 
@@ -467,7 +531,10 @@ plt.close()
 # 
 # An emergent positive feedback promotes global-scale iron and macronutrient co-limitation.
 
-#%% Figure 4: 10,000 model simulations nutrient and export fluxes
+# **Figure 4: 10,000 model simulations nutrient and export fluxes**
+
+# In[13]:
+
 
 grid_gam   =   np.reshape(gamma,np.shape(grid_gamma))
 grid_lt    =1/(np.reshape(inv_lambda ,np.shape(grid_gamma))*3e7)
@@ -482,7 +549,7 @@ f4ax1c1=f4ax1.contourf(np.log10(grid_gam),np.log10(grid_lt),np.log10(grid_gaovla
 for a in f4ax1.collections:
     a.set_edgecolor("face")
 
-f4cbar1=fig4.colorbar(f4ax1c1,ax=f4ax1,ticks=np.arange(0,12.0,2.0),extend='both')
+f4cbar1=fig4.colorbar(f4ax1c1,ax=f4ax1,ticks=np.arange(0,12.0,2.0))
 f4cbar1.solids.set_edgecolor("face")
 f4cbar1.set_label('log$_{10}(\gamma/\lambda)$ [s]',fontsize=14)
 f4ax1.set_ylabel('log$_{10}(\lambda)$ [s$^{-1}$]',fontsize=14)
@@ -546,11 +613,11 @@ f4ax2a.text(-7,np.max(f4ax2a.get_ylim())+2.0,'(b)',fontsize=16)
 f4ax2a.text(7,np.max(f4ax2a.get_ylim())-3.5,'Iron',color='firebrick',fontsize=14)
 f4ax2a.text(6,np.max(f4ax2a.get_ylim())-.75,'Ligand',color=mycm(128),fontsize=14)
 f4ax2a.text(8,np.max(f4ax2a.get_ylim())+.5,'Iron replete\n(macronutrient\nlimited)',horizontalalignment='center',fontsize=14)
-f4ax2a.text((colimits[1]+colimits[0])/2,np.max(f4ax2a.get_ylim())+1.3,'Co-\nlimited',rotation=-90,horizontalalignment='center',fontsize=14)
+f4ax2a.text((colimits[1]+colimits[0])/2,np.max(f4ax2a.get_ylim())+0.6,'Co-\nlimited',rotation=-90,horizontalalignment='center',fontsize=14)
 f4ax2a.text(-2.1,np.max(f4ax2a.get_ylim())+.5,'Iron limited\n(macronutrient\nreplete)',horizontalalignment='center',fontsize=14)
 
 # Plot data-based constraint of gamma/lambda
-f4ax2a.annotate(s='', xy=(np.max(data_goverl),np.min(f4ax2a.get_ylim())), xytext=(np.min(data_goverl),np.min(f4ax2a.get_ylim())), arrowprops=dict(color='black',arrowstyle='<|-|>,head_width=0.5,head_length=0.5', shrinkA=0, shrinkB=0, linewidth=2))
+f4ax2a.annotate(text='', xy=(np.max(data_goverl),np.min(f4ax2a.get_ylim())), xytext=(np.min(data_goverl),np.min(f4ax2a.get_ylim())), arrowprops=dict(color='black',arrowstyle='<|-|>,head_width=0.5,head_length=0.5', shrinkA=0, shrinkB=0, linewidth=2))
 
 # Plot median export values in each basin
 f4ax3.plot(np.log10(gaovla_average),exp1_average-exp1_spread,color=mycm(10))
@@ -575,14 +642,14 @@ f4ax3.xaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 f4ax3.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 
 # Plot data-based constraint of gamma/lambda
-f4ax3.annotate(s='', xy=(np.max(data_goverl),np.min(f4ax3.get_ylim())), xytext=(np.min(data_goverl),np.min(f4ax3.get_ylim())), arrowprops=dict(color='black',arrowstyle='<|-|>,head_width=0.5,head_length=0.5', shrinkA=0, shrinkB=0, linewidth=2))
+f4ax3.annotate(text='', xy=(np.max(data_goverl),np.min(f4ax3.get_ylim())), xytext=(np.min(data_goverl),np.min(f4ax3.get_ylim())), arrowprops=dict(color='black',arrowstyle='<|-|>,head_width=0.5,head_length=0.5', shrinkA=0, shrinkB=0, linewidth=2))
 
 f4ax3.text(-7,np.max(f4ax3.get_ylim())+0.5,'(c)',fontsize=16)
 f4ax3.text(7.5,2.25,'Total',color='firebrick',horizontalalignment='center',fontsize=14)
 f4ax3.text(7.5,1.65,'\"Southern\nOcean\"',color=mycm(10),horizontalalignment='center',fontsize=14)
 f4ax3.text(7.5,0.2,'\"Atlantic\nOcean\"',color=mycm(128),horizontalalignment='center',fontsize=14)
 f4ax3.text(8,1.04*np.max(f4ax3.get_ylim()),'Iron replete\n(macronutrient\nlimited)',horizontalalignment='center',fontsize=14)
-f4ax3.text((colimits[1]+colimits[0])/2,1.1*np.max(f4ax3.get_ylim()),'Co-\nlimited',rotation=-90,horizontalalignment='center',fontsize=14)
+f4ax3.text((colimits[1]+colimits[0])/2,1.05*np.max(f4ax3.get_ylim()),'Co-\nlimited',rotation=-90,horizontalalignment='center',fontsize=14)
 f4ax3.text(-2,1.04*np.max(f4ax3.get_ylim()),'Iron limited\n(macronutrient\nreplete)',horizontalalignment='center',fontsize=14)
 
 # Co limitation zone
@@ -601,12 +668,16 @@ plt.show()
 fig4.savefig('ensemble_nutrients_export_plot.'+figfmt,format=figfmt,facecolor=fig4.get_facecolor(), edgecolor='none',bbox_inches='tight')
 plt.close()
 
+
 # It is notable that the concentrations and rates of microbial production converge to a tight curve as a function of gamma/lambda while representing numerous combinations of individual gamma and lambda values, as well as a range of random arbitrary initial conditions. In other words, the outcomes are robust and predictable for any given gamma/lambda, and independent of initial conditions: the feedback restores the degree of biological limitation between macronutrients and iron for the specific value of gamma/lambda.
 # 
 # Guided by these data, the experiments can be partitioned into three regimes: 
 # (i) iron-replete (macronutrient limited) simulations, (ii) iron-limited (macronutrient replete) simulations, and (iii) iron and macronutrient co-limited simulations (region shaded grey).
 
-#%% Figure 5: 10,000 model simulations model-data comparison
+# **Figure 5: 10,000 model simulations model-data comparison**
+
+# In[14]:
+
 
 jgrid =np.reshape(jovern,np.shape(grid_gamma))
 pgrid =np.reshape(pstar ,np.shape(grid_gamma))
@@ -619,7 +690,7 @@ fig5.patch.set_facecolor('None')
 f5ax1c1=f5ax1.contourf(np.log10(grid_gam),np.log10(grid_lt),jgrid,np.arange(0,0.85,0.05),cmap=mycm,vmin=0,vmax=0.8,extend='max')
 for a in f5ax1.collections:
     a.set_edgecolor("face")
-f5cbar1=fig5.colorbar(f5ax1c1,ax=f5ax1,ticks=np.arange(0,0.9,0.1),extend='max')
+f5cbar1=fig5.colorbar(f5ax1c1,ax=f5ax1,ticks=np.arange(0,0.9,0.1))
 f5cbar1.solids.set_edgecolor("face")
 f5cbar1.set_label('Model-data comparison score (S)',fontsize=14)
 
@@ -654,15 +725,15 @@ f5ax2.set_ylim(bottom=-0.05,top=1.05)
 f5ax2.xaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 
 # Plot horizontal line where cost function uses the value for 1nm fixed ligand concentration
-#f5ax2.annotate(s='', xy=(np.min(f5ax2.get_xlim()),jovern_fixed1nmlig,), xytext=(np.log10(np.min(gaovla_average[np.logical_and(gaovla_average>gaovla_average[np.nanargmax(jovern_average)],jovern_average<=jovern_fixed1nmlig)])),jovern_fixed1nmlig), arrowprops=dict(color=mycm(10),linestyle='--',arrowstyle='-|>,head_width=0.5,head_length=0.5',shrinkA=0, shrinkB=0, linewidth=2))
+#f5ax2.annotate(text='', xy=(np.min(f5ax2.get_xlim()),jovern_fixed1nmlig,), xytext=(np.log10(np.min(gaovla_average[np.logical_and(gaovla_average>gaovla_average[np.nanargmax(jovern_average)],jovern_average<=jovern_fixed1nmlig)])),jovern_fixed1nmlig), arrowprops=dict(color=mycm(10),linestyle='--',arrowstyle='-|>,head_width=0.5,head_length=0.5',shrinkA=0, shrinkB=0, linewidth=2))
 f5ax2.axhline(jovern_fixed1nmlig,linestyle='--',color=mycm(10))
 
 # Plot data-based constraint of gamma/lambda
-f5ax2.annotate(s='', xy=(np.max(data_goverl),np.min(f5ax2.get_ylim())), xytext=(np.min(data_goverl),np.min(f5ax2.get_ylim())), arrowprops=dict(color='black',arrowstyle='<|-|>,head_width=0.5,head_length=0.5', shrinkA=0, shrinkB=0, linewidth=2))
+f5ax2.annotate(text='', xy=(np.max(data_goverl),np.min(f5ax2.get_ylim())), xytext=(np.min(data_goverl),np.min(f5ax2.get_ylim())), arrowprops=dict(color='black',arrowstyle='<|-|>,head_width=0.5,head_length=0.5', shrinkA=0, shrinkB=0, linewidth=2))
 
 f5ax2.text(-7,1.25,'(b)',fontsize=16)
 f5ax2.text(8,1.09,'Iron replete\n(macronutrient\nlimited)',horizontalalignment='center',fontsize=14)
-f5ax2.text((colimits[1]+colimits[0])/2,1.18,'Co-\nlimited',rotation=-90,horizontalalignment='center',fontsize=14)
+f5ax2.text((colimits[1]+colimits[0])/2,1.09,'Co-\nlimited',rotation=-90,horizontalalignment='center',fontsize=14)
 f5ax2.text(-2,1.09,'Iron limited\n(macronutrient\nreplete)',horizontalalignment='center',fontsize=14)
 
 # Co limitation zone
@@ -684,11 +755,11 @@ f5ax3.set_ylim(bottom=-0.05,top=1.05)
 f5ax3.xaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 
 # Optimum model macronutrient usage efficiency
-#f5ax3.annotate(s='', xy=(np.max(f5ax3.get_xlim()),pstar_average[np.nanargmax(jovern_average)],), xytext=(np.log10(gaovla_average[np.nanargmax(jovern_average)]),pstar_average[np.nanargmax(jovern_average)]), arrowprops=dict(color='firebrick',linestyle=':',arrowstyle='-|>,head_width=0.5,head_length=0.5', shrinkA=0, shrinkB=0, linewidth=2))
+#f5ax3.annotate(text='', xy=(np.max(f5ax3.get_xlim()),pstar_average[np.nanargmax(jovern_average)],), xytext=(np.log10(gaovla_average[np.nanargmax(jovern_average)]),pstar_average[np.nanargmax(jovern_average)]), arrowprops=dict(color='firebrick',linestyle=':',arrowstyle='-|>,head_width=0.5,head_length=0.5', shrinkA=0, shrinkB=0, linewidth=2))
 f5ax3.axhline(pstar_average[np.nanargmax(jovern_average)],linestyle='--',color='firebrick')
 
 # Plot data-based constraint of gamma/lambda
-f5ax2.annotate(s='', xy=(np.max(data_goverl),np.min(f5ax2.get_ylim())), xytext=(np.min(data_goverl),np.min(f5ax2.get_ylim())), arrowprops=dict(color='black',arrowstyle='<|-|>,head_width=0.5,head_length=0.5', shrinkA=0, shrinkB=0, linewidth=2))
+f5ax2.annotate(text='', xy=(np.max(data_goverl),np.min(f5ax2.get_ylim())), xytext=(np.min(data_goverl),np.min(f5ax2.get_ylim())), arrowprops=dict(color='black',arrowstyle='<|-|>,head_width=0.5,head_length=0.5', shrinkA=0, shrinkB=0, linewidth=2))
 
 # Co limitation zone
 f5ax3.fill_between((colimits[0],colimits[1]),
@@ -696,11 +767,11 @@ f5ax3.fill_between((colimits[0],colimits[1]),
 
 f5ax3.text(-7,1.25,'(c)',fontsize=16)
 f5ax3.text(8,1.09,'Iron replete\n(macronutrient\nlimited)',horizontalalignment='center',fontsize=14)
-f5ax3.text((colimits[1]+colimits[0])/2,1.18,'Co-\nlimited',rotation=-90,horizontalalignment='center',fontsize=14)
+f5ax3.text((colimits[1]+colimits[0])/2,1.09,'Co-\nlimited',rotation=-90,horizontalalignment='center',fontsize=14)
 f5ax3.text(-2,1.09,'Iron limited\n(macronutrient\nreplete)',horizontalalignment='center',fontsize=14)
 
 # Plot data-based constraint of gamma/lambda
-f5ax3.annotate(s='', xy=(np.max(data_goverl),np.min(f5ax2.get_ylim())), xytext=(np.min(data_goverl),np.min(f5ax2.get_ylim())), arrowprops=dict(color='black',arrowstyle='<|-|>,head_width=0.5,head_length=0.5', shrinkA=0, shrinkB=0, linewidth=2))
+f5ax3.annotate(text='', xy=(np.max(data_goverl),np.min(f5ax2.get_ylim())), xytext=(np.min(data_goverl),np.min(f5ax2.get_ylim())), arrowprops=dict(color='black',arrowstyle='<|-|>,head_width=0.5,head_length=0.5', shrinkA=0, shrinkB=0, linewidth=2))
 
 # The range for macronutrient usage efficiency values bounded by jovern>=jovern_fixed1nmlig is 
 pstar_range=np.array((                np.max(pstar_average[np.logical_and(gaovla_average<gaovla_average[np.nanargmax(jovern_average)],jovern_average<=jovern_fixed1nmlig)]),
@@ -713,6 +784,7 @@ plt.subplots_adjust(wspace=0.4)
 plt.show()
 fig5.savefig('ensemble_model_data_plot.'+figfmt,format=figfmt,facecolor=fig5.get_facecolor(), edgecolor='none',bbox_inches='tight')
 plt.close()
+
 
 # We scored ensemble members by quantitative comparison to oceanic observations (S: possible range 0--1).
 # Scores were compared to a benchmark evaluated from a model simulation where ligand concentration was held fixed at a uniform, global value of 1nM. Dynamic ligand simulations with model-data comparison scores greater than the benchmark value are outperforming the standard parameterization. The best scores are obtained in a band of intermediate gamma/lambda with moderate levels of macronutrients, iron, and ligands. 
