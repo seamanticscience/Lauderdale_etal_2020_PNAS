@@ -23,8 +23,14 @@
 !         |                              | 
 !         --------------------------------
        subroutine model(maxyears, outputyears,
-     &       pin, fin, lin,
-     &       tout,pout,fout,lout,epout,nlout,psout,  
+     &       p1in,p2in,p3in,
+     &       f1in,f2in,f3in,
+     &       l1in,l2in,l3in,
+     &       tout,
+     &       p1out,p2out,p3out,
+     &       f1out,f2out,f3out,
+     &       l1out,l2out,l3out,
+     &       ep1out,ep2out,nlout,psout,  
      &       gamma_Fe,lt_lifetime,depfactor,ventfactor,
      &       alpha_yr,dlambdadz,psi,id)
 
@@ -70,9 +76,9 @@
        K = K * 1.0e6 
        
 ! convert to moles m-3
-       po4 = pin*conv 
-       fet = fin*conv
-       lt  = lin*conv 
+       po4 = (/p1in,p2in,p3in/)*conv 
+       fet = (/f1in,f2in,f3in/)*conv
+       lt  = (/l1in,l2in,l3in/)*conv 
         
 ! initialize tracer rates of change 
        dpo4dt= 0.0
@@ -141,13 +147,25 @@
        endif
 
 ! output to array
-        tout(outstep) = time
-        do i=1,nbox
-           pout(i,outstep) = po4M(i)
-           fout(i,outstep) = fetM(i)
-           lout(i,outstep) = ltM (i)
-           epout(i,outstep)= export(i)*vol(i) 
-        enddo
+         tout (outstep)  = time
+         p1out (outstep) = po4M(1)
+         p2out (outstep) = po4M(2)
+         p3out (outstep) = po4M(3)
+         f1out (outstep) = fetM(1)
+         f2out (outstep) = fetM(2)
+         f3out (outstep) = fetM(3)
+         l1out (outstep) = ltM (1)
+         l2out (outstep) = ltM (2)
+         l3out (outstep) = ltM (3)
+         ep1out(outstep) = export(1)*vol(1) 
+         ep2out(outstep) = export(2)*vol(2) 
+! Python Pandas really doesnt like this output
+!         do i=1,nbox
+!           pout (outstep,i) = po4M(i)
+!           fout (outstep,i) = fetM(i)
+!           lout (outstep,i) = ltM (i)
+!           epout(outstep,i)= export(i)*vol(i) 
+!         enddo
         nlout(outstep) = lim
         psout(outstep) = pstar
 
@@ -275,13 +293,25 @@
        endif
        
 ! output to array
-         tout(outstep) = time
-         do i=1,nbox
-           pout(i,outstep) = po4M(i)
-           fout(i,outstep) = fetM(i)
-           lout(i,outstep) = ltM (i)
-           epout(i,outstep)= export(i)*vol(i) 
-         enddo
+         tout (outstep)  = time
+         p1out (outstep) = po4M(1)
+         p2out (outstep) = po4M(2)
+         p3out (outstep) = po4M(3)
+         f1out (outstep) = fetM(1)
+         f2out (outstep) = fetM(2)
+         f3out (outstep) = fetM(3)
+         l1out (outstep) = ltM (1)
+         l2out (outstep) = ltM (2)
+         l3out (outstep) = ltM (3)
+         ep1out(outstep) = export(1)*vol(1) 
+         ep2out(outstep) = export(2)*vol(2) 
+! Python Pandas really doesnt like this output
+!         do i=1,nbox
+!           pout (outstep,i) = po4M(i)
+!           fout (outstep,i) = fetM(i)
+!           lout (outstep,i) = ltM (i)
+!           epout(outstep,i)= export(i)*vol(i) 
+!         enddo
          nlout(outstep) = lim
          psout(outstep) = pstar
 

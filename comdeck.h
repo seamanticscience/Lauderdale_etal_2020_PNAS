@@ -37,9 +37,19 @@
         REAL*8, PARAMETER :: conv = 1024.5  
 
 ! biogeochemical tracers input
-       REAL*8, intent(in), DIMENSION(nbox) :: pin   
-       REAL*8, intent(in), DIMENSION(nbox) :: fin   
-       REAL*8, intent(in), DIMENSION(nbox) :: lin   
+! Python F2Py/Pandas really  doesnt like this input
+!       REAL*8, intent(in), DIMENSION(nbox) :: pin   
+!       REAL*8, intent(in), DIMENSION(nbox) :: fin   
+!       REAL*8, intent(in), DIMENSION(nbox) :: lin   
+       REAL*8, intent(in) :: p1in 
+       REAL*8, intent(in) :: p2in 
+       REAL*8, intent(in) :: p3in 
+       REAL*8, intent(in) :: f1in 
+       REAL*8, intent(in) :: f2in 
+       REAL*8, intent(in) :: f3in 
+       REAL*8, intent(in) :: l1in 
+       REAL*8, intent(in) :: l2in 
+       REAL*8, intent(in) :: l3in 
        
 ! biogeochemical tracers internal
        REAL*8, DIMENSION(nbox) :: po4   
@@ -47,10 +57,22 @@
        REAL*8, DIMENSION(nbox) :: lt    
 
 ! biogeochemical tracers output 
-       REAL*8, intent(out), DIMENSION(nbox,outstepmax+1) :: pout  
-       REAL*8, intent(out), DIMENSION(nbox,outstepmax+1) :: fout  
-       REAL*8, intent(out), DIMENSION(nbox,outstepmax+1) :: lout  
-       REAL*8, intent(out), DIMENSION(nbox,outstepmax+1) :: epout 
+       REAL*8, intent(out), DIMENSION(outstepmax+1)      :: p1out 
+       REAL*8, intent(out), DIMENSION(outstepmax+1)      :: p2out 
+       REAL*8, intent(out), DIMENSION(outstepmax+1)      :: p3out 
+       REAL*8, intent(out), DIMENSION(outstepmax+1)      :: f1out 
+       REAL*8, intent(out), DIMENSION(outstepmax+1)      :: f2out 
+       REAL*8, intent(out), DIMENSION(outstepmax+1)      :: f3out 
+       REAL*8, intent(out), DIMENSION(outstepmax+1)      :: l1out 
+       REAL*8, intent(out), DIMENSION(outstepmax+1)      :: l2out 
+       REAL*8, intent(out), DIMENSION(outstepmax+1)      :: l3out 
+       REAL*8, intent(out), DIMENSION(outstepmax+1)      :: ep1out
+       REAL*8, intent(out), DIMENSION(outstepmax+1)      :: ep2out
+! Python F2Py/Pandas really  doesnt like this output
+!       REAL*8, intent(out), DIMENSION(outstepmax+1,nbox) :: pout  
+!       REAL*8, intent(out), DIMENSION(outstepmax+1,nbox) :: fout  
+!       REAL*8, intent(out), DIMENSION(outstepmax+1,nbox) :: lout  
+!       REAL*8, intent(out), DIMENSION(outstepmax+1,nbox) :: epout 
        REAL*8, intent(out), DIMENSION(outstepmax+1)      :: nlout 
        REAL*8, intent(out), DIMENSION(outstepmax+1)      :: tout  
        REAL*8, intent(out), DIMENSION(outstepmax+1)      :: psout 

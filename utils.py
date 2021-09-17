@@ -76,7 +76,7 @@ def calc_cost(modin,ref,stdev,iters=1):
     cost=np.sum(np.power(modin.transpose()-np.tile(ref,(iters,1)),2)/np.tile(np.power(stdev,2),(iters,1)),axis=1)
     return cost
 
-def calc_boxmodel_vars(data_pd,area,ivar,nref,nstd,fref,fstd,lref,lstd,Rcp=117,Rnp=16):   
+def calc_boxmodel_vars_iter(data_pd,area,ivar,nref,nstd,fref,fstd,lref,lstd,Rcp=106,Rnp=16):   
     # Calculate box model diagnostics - requires pandas input
     global ncost, fcost, lcost, pstar, nsurfmean, fsurfmean, lsurfmean, \
            nso, fso, lso, nna, fna, lna, ndo, fdo, ldo, nlimit, export, expbox
@@ -97,16 +97,9 @@ def calc_boxmodel_vars(data_pd,area,ivar,nref,nstd,fref,fstd,lref,lstd,Rcp=117,R
     pstar[ivar]=data_pd.pstar.tail(1)
     expbox[ivar,0] =data_pd.export1.tail(1).to_numpy(copy=True)*molpsm1_2_gtcym1
     expbox[ivar,1] =data_pd.export2.tail(1).to_numpy(copy=True)*molpsm1_2_gtcym1
-    export[ivar]   =(data_pd.export1.tail(1).to_numpy(copy=True)+data_pd.export2.tail(1))*molpsm1_2_gtcym1 
+    export[ivar]   =(data_pd.export1.tail(1).to_numpy(copy=True)+data_pd.export2.tail(1).to_numpy(copy=True))*molpsm1_2_gtcym1 
     
     nlimit[ivar]=data_pd.lim.tail(1).to_numpy(copy=True)
-#   Old nutrient limit text codes.
-#    tmp=['XX','XX','XX','XX','XX','XX','XX','XX','XX','XX','XX',
-#         'PP','PI','PL','PC','XX','XX','XX','XX','XX','XX',
-#         'IP','II','IL','IC','XX','XX','XX','XX','XX','XX',
-#         'LP','LI','LL','LC','XX','XX','XX','XX','XX','XX',
-#         'CP','CI','CL','CC']
-#    nlimit[ivar]=np.double(tmp.index(data_pd.lim.tail(1).values))
     
     nsm=np.array((data_pd.p1*area[0]+data_pd.p2*area[1])/(area[0]+area[1]))*Rnp
     fsm=np.array((data_pd.f1*area[0]+data_pd.f2*area[1])/(area[0]+area[1]))
@@ -127,6 +120,34 @@ def calc_boxmodel_vars(data_pd,area,ivar,nref,nstd,fref,fstd,lref,lstd,Rcp=117,R
     ndo[ivar]=data_pd.p3.tail(1).to_numpy(copy=True)*Rnp
     fdo[ivar]=data_pd.f3.tail(1).to_numpy(copy=True)
     ldo[ivar]=data_pd.l3.tail(1).to_numpy(copy=True)
+
+def calc_boxmodel_vars(data_pd,df_aux,df_refs,Rcp=106):
+    # Calculate box model diagnostics - requires pandas input
+    data_pd['ncost']=calc_cost((data_pd[["nso","nna","ndo"]].T.values),
+                               (df_refs.filter(regex='^n[a-zA-Z]{2}ref').values),
+                               (df_refs.filter(regex='^n[a-zA-Z]{2}std').values))
+    data_pd['fcost']=calc_cost((data_pd[["fso","fna","fdo"]].T.values),
+                               (df_refs.filter(regex='^f[a-zA-Z]{2}ref').values),
+                               (df_refs.filter(regex='^f[a-zA-Z]{2}std').values))
+    data_pd['lcost']=calc_cost((data_pd[["lso","lna","ldo"]].T.values),
+                               (df_refs.filter(regex='^l[a-zA-Z]{2}ref').values),
+                               (df_refs.filter(regex='^l[a-zA-Z]{2}std').values))
+
+    data_pd['nsurf']=(data_pd["nso"]*df_aux["areaso"]+data_pd["nna"]*df_aux["areana"])/(df_aux["areaso"]+df_aux["areana"])
+    data_pd['fsurf']=(data_pd["fso"]*df_aux["areaso"]+data_pd["fna"]*df_aux["areana"])/(df_aux["areaso"]+df_aux["areana"])
+    data_pd['lsurf']=(data_pd["lso"]*df_aux["areaso"]+data_pd["lna"]*df_aux["areana"])/(df_aux["areaso"]+df_aux["areana"])
+    data_pd["exportt"]=(data_pd["export1"].values+data_pd["export2"].values)*Rcp*86400*365*12*1e-15 # convert molP/s to GtC/yr
+
+    # Model-data comparison score
+    # number of obs used in objective function - 3 boxes and 3 variables (weighted equally)
+    nobs=df_refs.filter(regex='^[a-zA-Z]{3}ref').count().count()
+    data_pd['jovern']  = np.exp(-1*(data_pd['ncost']+data_pd['fcost']+data_pd['lcost'])/nobs) 
+    # Seperate contributions (multiply to recover full score)
+    data_pd['jovernn'] = np.exp(-1*(data_pd['ncost'])/nobs) 
+    data_pd['jovernf'] = np.exp(-1*(data_pd['fcost'])/nobs) 
+    data_pd['jovernl'] = np.exp(-1*(data_pd['lcost'])/nobs) 
+    
+    return data_pd
 
 def run_boxmodel_iter(parray,farray,larray,gamma_fe,lt_rate,
                       dustdep,ventdep,alpha_yr,psi,dlambdadz,niters,ninit,
@@ -173,7 +194,81 @@ def run_boxmodel_iter(parray,farray,larray,gamma_fe,lt_rate,
         data_pd = pd.DataFrame(np.hstack((tout[:tlen,np.newaxis],pout[:,:tlen].T,fout[:,:tlen].T,lout[:,:tlen].T,epout[0:2,:tlen].T,nlout[:tlen,np.newaxis],psout[:tlen,np.newaxis])),
                                columns=["t","p1","p2","p3","f1","f2","f3","l1","l2","l3","export1","export2","lim","pstar"])
         
-        calc_boxmodel_vars(data_pd,area,ivar,nref,nstd,fref,fstd,lref,lstd,Rcp=117,Rnp=16)
+        calc_boxmodel_vars_iter(data_pd,area,ivar,nref,nstd,fref,fstd,lref,lstd,Rcp=Rcp,Rnp=Rnp)
+        
+def run_boxmodel(df_input,df_parms,df_aux,df_refs,workers=1,Rcp=106,Rnp=16):
+    '''
+    Run the box model:
+    
+    a) workers=1; in series using pandas' "apply" to run through rows of a data frame of inputs
+    b) workers>1; in parallel using pandarallel's "parallel_apply"
+    
+    returns pandas dataframe with the results
+    '''
+    
+    df_tim=df_parms[["gamma","lambda"]].rename(columns={"gamma":"nyrs","lambda":"tout"})
+    
+    # Want to run some of these models a lot longer to reach equilibrium
+    df_tim["nyrs"].where(np.logical_and((df_parms["lambda"]/3e7)>(10**1),
+                                        (df_parms["gamma"]/Rcp)<(10**-4.75)),1.e4,inplace=True)
+    df_tim["nyrs"].mask (np.logical_and((df_parms["lambda"]/3e7)>=(10**1),
+                                        (df_parms["gamma"]/Rcp)<=(10**-4.75)),1.e5,inplace=True)
+    df_tim["tout"].where(np.logical_and((df_parms["lambda"]/3e7)>(10**1),
+                                        (df_parms["gamma"]/Rcp)<(10**-4.75)),10. ,inplace=True)
+    df_tim["tout"].mask (np.logical_and((df_parms["lambda"]/3e7)>=(10**1),
+                                        (df_parms["gamma"]/Rcp)<=(10**-4.75)),100.,inplace=True)    
+    #df_tim["nyrs"] = df_tim["nyrs"]*0 + 1e4
+    #df_tim["tout"] = df_tim["tout"]*0 + 10
+    df_boxmodel=pd.concat((df_tim,df_input,df_parms,df_aux[["gamma_over_lambda"]]),axis=1,sort=False)
+    
+    # Define private helper function
+    def _boxmodel(self):
+        # nutboxmod provides "model" which is the fortran model compiled with "f2py"
+        import glob            as gb
+        import importlib.util  as iu
+        spec = iu.spec_from_file_location("nutboxmod",gb.glob("nutboxmod*so")[0])
+        nutboxmod = iu.module_from_spec(spec)
+        spec.loader.exec_module(nutboxmod)
+        
+        nt=self.nyrs
+        dt=self.tout
+        
+        # Order or inputs:
+        # "nyrs","tout",
+        # "n1","n2","n3","f1","f2","f3","l1","l2","l3",
+        # "gamma","lambda","sFetop","sFebot","alphabio","dlambdadz","psi","niter"
+
+        timeseries = pd.DataFrame(
+                nutboxmod.model(
+                    *self [["nyrs","tout",
+                            "nso","nna","ndo","fso","fna","fdo","lso","lna","ldo",
+                            "gamma","lambda","sFetop","sFebot","alphabio",
+                            "dlambdadz","psi","niter"
+                           ]].values),
+                index=["tout","nso","nna","ndo","fso","fna","fdo","lso","lna","ldo",
+                       "export1","export2","lim","pstar"]).transpose()
+    
+        return pd.concat((self[["nyrs"]],timeseries.iloc[np.int(nt/dt)],
+                 self[["gamma","lambda","gamma_over_lambda","sFetop","sFebot",
+                       "alphabio","psi","dlambdadz","niter"]]))
+    
+    if workers==1:
+        # Run in serial mode (avoids overhead of pandarallel if not running multiprocessor)
+        df_output=df_boxmodel.apply(_boxmodel,axis=1)
+    elif workers>1:
+        # Run in parallel
+        from pandarallel import pandarallel
+        pandarallel.initialize(nb_workers=workers,progress_bar=True)
+        
+        df_output=df_boxmodel.parallel_apply(_boxmodel,axis=1)    
+        
+    # Boxmodel macronutrient is phosphate, do we need to convert to Nitrate?
+    df_output[["nso","nna","ndo"]]=df_output[["nso","nna","ndo"]]*Rnp
+        
+    # Do some post processing    
+    df_output=calc_boxmodel_vars(df_output,df_aux,df_refs,Rcp=Rcp)
+    
+    return df_output
 
 def read_boxmodel_iter(ninit,niters,nref,nstd,fref,fstd,lref,lstd,area,fprefix='ironmodel',Rcp=117,Rnp=16):
     global ncost, fcost, lcost, pstar, nsurfmean, fsurfmean, lsurfmean, \
@@ -182,13 +277,13 @@ def read_boxmodel_iter(ninit,niters,nref,nstd,fref,fstd,lref,lstd,area,fprefix='
     # Read in the output files
     for ivar in range(niters):
         if np.remainder(ivar,250)==0:
-                print("Reading iteration "+np.str(ninit+ivar+1)+" out of "+np.str(niters))
+            print("Reading iteration "+np.str(ninit+ivar+1)+" out of "+np.str(niters))
         fname=fprefix+np.str(("%06d" % (ninit+ivar,)))+'.dat'
     
         data_pd = pd.read_csv(fname, delimiter="\s+",skiprows=0,header=0, 
                            names=["t","p1","p2","p3","f1","f2","f3","l1","l2","l3","export1","export2","lim","pstar"])
                            
-        calc_boxmodel_vars(data_pd,area,ivar,nref,nstd,fref,fstd,lref,lstd,Rcp=117,Rnp=16)
+        calc_boxmodel_vars_iter(data_pd,area,ivar,nref,nstd,fref,fstd,lref,lstd,Rcp=Rcp,Rnp=Rnp)
 
 def calc_gamma_over_lambda_range(expin=None,volin=None,ltin=None):
     #This is a data-based estimate of gamma/lambda.
